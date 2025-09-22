@@ -555,6 +555,37 @@
             updateSidebarValues();
         });
 
+        // Debounce utility
+        function debounce(fn, delay) {
+            let timeout;
+            return function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => fn.apply(this, args), delay);
+            };
+        }
+
+        // Debounced force slider handlers
+        centerForceSlider.addEventListener('input', debounce(function () {
+            radialForce.strength(+this.value);
+            simulation.alpha(0.5).restart();
+            updateSidebarValues();
+        }, 200));
+        repelForceSlider.addEventListener('input', debounce(function () {
+            repelForce.strength(-Math.abs(+this.value));
+            simulation.alpha(0.5).restart();
+            updateSidebarValues();
+        }, 200));
+        linkForceSlider.addEventListener('input', debounce(function () {
+            linkForce.strength(+this.value);
+            simulation.alpha(0.5).restart();
+            updateSidebarValues();
+        }, 200));
+        linkDistanceSlider.addEventListener('input', debounce(function () {
+            linkForce.distance(+this.value);
+            simulation.alpha(0.5).restart();
+            updateSidebarValues();
+        }, 200));
+
         sidebarToggle.addEventListener('click', function () {
             sidebar.classList.toggle('minimized');
             document.body.classList.toggle('sidebar-minimized');
