@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Force Directed Graph Demo</title>
+    <title>UMSU Club Map</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <link href='https://fonts.googleapis.com/css?family=Inter' rel='stylesheet'>
@@ -221,6 +221,7 @@
 <svg></svg>
 <script>
     // CONSTANTS
+    const BASE_URL = "https://umsu.unimelb.edu.au";
     // Node and link appearance
     const NODE_RADIUS = 20; // Default node radius
     const NODE_RADIUS_HOVER = 21; // Node radius on hover
@@ -247,7 +248,7 @@
     const SIMULATION_ALPHA_ON_DRAG = 0.3; // Simulation alpha target on drag start
     const SIMULATION_ALPHA_ON_RESIZE = 0.5; // Simulation alpha on window resize
 
-    const tags = {
+    const categories = {
         person: "#df5252", // green
         club: "#e0b152", // blue
         default: "#aaaab3" // fallback color
@@ -381,9 +382,9 @@
             return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
         }
 
-        // Helper to get node color by tag
+        // Helper to get node color by category
         function getNodeBaseColor(node) {
-            return tags[node.tag] || tags.default;
+            return categories[node.category] || categories.default;
         }
 
         // Show label on hover, hide on mouseout (unless zoomed in)
@@ -597,22 +598,34 @@
             const descContainer = document.getElementById('node-description-container');
             const descDiv = document.getElementById('node-description');
             const nameDiv = document.getElementById('node-name');
-            nameDiv.textContent = d.id;
+            // Clear previous content
+            nameDiv.textContent = '';
+            if (d.data && d.data.page_link) {
+                const a = document.createElement('a');
+                a.href = BASE_URL + d.data.page_link;
+                a.target = '_blank';
+                a.style.color = 'inherit';
+                a.style.textDecoration = 'underline';
+                a.textContent = d.id;
+                nameDiv.appendChild(a);
+            } else {
+                nameDiv.textContent = d.id;
+            }
             let html = '';
-            if (d.tag === 'person' && d.data) {
+            if (d.category === 'person' && d.data) {
                 html += '<b>Club Roles:</b><ul style="margin:0 0 8px 0;">';
-                for (const [club, roles] of Object.entries(d.data)) {
+                for (const [club, roles] of Object.entries(d.data.clubs)) {
                     html += `<li><b>${club}:</b> ${roles.join(', ')}</li>`;
                 }
                 html += '</ul>';
-            } else if (d.tag === 'club' && d.data) {
+            } else if (d.category === 'club' && d.data) {
                 if (d.data.desc_short) {
                     html += `<div style='margin-bottom:8px;'><b>Description:</b> ${d.data.desc_short}</div>`;
                 }
                 if (d.data.committee) {
                     html += '<b>Committee:</b><ul style="margin:0;">';
                     for (const [role, people] of Object.entries(d.data.committee)) {
-                        html += `<li><b>${role}:</b> ${people.join(', ')}</li>`;
+                        html += `<li><b>${role}:</b> ${people.map(x => x.name).join(', ')}</li>`;
                     }
                     html += '</ul>';
                 }
