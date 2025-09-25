@@ -1,495 +1,479 @@
-const BASE_URL = "https://umsu.unimelb.edu.au";
-const NODE_RADIUS = 20;
-const NODE_RADIUS_HOVER = 21;
-const NODE_BRIGHTEN_FACTOR = 1.2;
-const NODE_DARKEN_FACTOR = 0.5;
-
-const LINK_BASE_COLOR = "#aaaab3";
-const LINK_BRIGHTEN_FACTOR = 2;
-const LINK_DARKEN_FACTOR = 0.5;
-
-const LABEL_FONT_SIZE = 16;
-const LABEL_OPACITY_DEFAULT = 0;
-const LABEL_OPACITY_HOVER = 1;
-const LABEL_OPACITY_HOVER_OTHER_MAX = 0.2;
-const LABEL_DY_DEFAULT = -28;
-const LABEL_DY_HOVER = NODE_RADIUS - NODE_RADIUS_HOVER;
-const LABEL_DISPLAY = "block";
-
-const ZOOM_MIN = 0.1;
-const ZOOM_MAX = 8;
-const ZOOM_OPACITY_MIN = 0.1;
-const ZOOM_OPACITY_MAX = 1;
-const SIMULATION_ALPHA_ON_DRAG = 0.3;
-const SIMULATION_ALPHA_ON_RESIZE = 0.5;
-
-let sidebar;
-let sidebarToggle;
-let centerForceSlider;
-let repelForceSlider;
-let linkForceSlider;
-let linkDistanceSlider;
-let centerForceValue;
-let repelForceValue;
-let linkForceValue;
-let linkDistanceValue;
-let searchInput;
-let searchResults;
-
-const categories = {
-    person: "#df5252",
-    club: "#e0b152",
-    default: "#aaaab3"
-};
-
-window.onload = function () {
-    sidebar = document.getElementById('sidebar');
-    sidebarToggle = document.getElementById('sidebar-toggle');
-    // Start with sidebar minimized
-    sidebar.classList.add('minimized');
-    document.body.classList.add('sidebar-minimized');
-    sidebarToggle.textContent = '<';
-    centerForceSlider = document.getElementById('center-force-slider');
-    repelForceSlider = document.getElementById('repel-force-slider');
-    linkForceSlider = document.getElementById('link-force-slider');
-    linkDistanceSlider = document.getElementById('link-distance-slider');
-    centerForceValue = document.getElementById('center-force-value');
-    repelForceValue = document.getElementById('repel-force-value');
-    linkForceValue = document.getElementById('link-force-value');
-    linkDistanceValue = document.getElementById('link-distance-value');
-    searchInput = document.getElementById('node-search');
-    searchResults = document.getElementById('search-results');
-
-    const svg = d3.select("svg");
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-
-    let currentZoom = 1;
-
-    async function loadData(url = '../clubs_people.json', maxNodes = -1) {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('Failed to load data');
-        const data = await response.json();
-        if (maxNodes == -1) return data;
-        if (!data.nodes || !data.links) throw new Error('data must have nodes and links arrays');
-        const limitedNodes = data.nodes.slice(0, maxNodes);
-        const nodeIds = new Set(limitedNodes.map(n => n.id));
-        const limitedLinks = data.links.filter(l => nodeIds.has(l.source) && nodeIds.has(l.target));
-        const limitedData = { nodes: limitedNodes, links: limitedLinks };
-        return limitedData;
-    }
-
-    function adjustColorBrightness(hex, factor) {
-        // Convert hex to RGB
-        let r = parseInt(hex.slice(1, 3), 16);
-        let g = parseInt(hex.slice(3, 5), 16);
-        let b = parseInt(hex.slice(5, 7), 16);
-        // Convert to HSL
-        r /= 255;
-        g /= 255;
-        b /= 255;
-        let max = Math.max(r, g, b), min = Math.min(r, g, b);
-        let h, s, l = (max + min) / 2;
-        if (max === min) {
-            h = s = 0;
-        } else {
-            let d = max - min;
-            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-            switch (max) {
-                case r:
-                    h = (g - b) / d + (g < b ? 6 : 0);
-                    break;
-                case g:
-                    h = (b - r) / d + 2;
-                    break;
-                case b:
-                    h = (r - g) / d + 4;
-                    break;
-            }
-            h /= 6;
-        }
-        // Adjust lightness (additive instead of multiplicative for more visible effect)
-        l = Math.max(0, Math.min(1, l + (factor - 1) * 0.5));
-        // Convert back to RGB
-        let hue2rgb = function (p, q, t) {
-            if (t < 0) t += 1;
-            if (t > 1) t -= 1;
-            if (t < 1 / 6) return p + (q - p) * 6 * t;
-            if (t < 1 / 2) return q;
-            if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
-            return p;
-        };
-        let q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-        let p = 2 * l - q;
-        r = hue2rgb(p, q, h + 1 / 3);
-        g = hue2rgb(p, q, h);
-        b = hue2rgb(p, q, h - 1 / 3);
-        r = Math.round(r * 255);
-        g = Math.round(g * 255);
-        b = Math.round(b * 255);
-        return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
-    }
-
-    function getNodeBaseColor(node) {
-        return categories[node.category] || categories.default;
-    }
-
-    function initializeGraph(nodes, links) {
-        const container = svg.append("g");
-
-        const zoomBehavior = d3.zoom()
-            .scaleExtent([ZOOM_MIN, ZOOM_MAX])
-            .on("zoom", (event) => {
-                currentZoom = event.transform.k;
-                container.attr("transform", event.transform);
-                updateLabelsVisibility();
-            });
-        svg.call(zoomBehavior);
-
-        const radialForce = d3.forceRadial(0, width / 2, height / 2).strength(0);
-        const repelForce = d3.forceManyBody().strength(0);
-        const linkForce = d3.forceLink(links).id(d => d.id).distance(250).strength(0);
-
-        const simulation = d3.forceSimulation(nodes)
-            .force("radial", radialForce)
-            .force("link", linkForce)
-            .force("charge", repelForce);
-
-        const link = container.append("g")
-            .selectAll("line")
-            .data(links)
-            .join("line")
-            .attr("class", "link")
-            .attr("stroke", LINK_BASE_COLOR)
-            .attr("stroke-width", 3);
-
-        const node = container.append("g")
-            .selectAll("circle")
-            .data(nodes)
-            .join("circle")
-            .attr("class", "node")
-            .attr("r", NODE_RADIUS)
-            .attr("fill", d => getNodeBaseColor(d))
-            .style("opacity", 1)
-            .call(drag(simulation));
-
-        const label = container.append("g")
-            .selectAll("text")
-            .data(nodes)
-            .join("text")
-            .attr("text-anchor", "middle")
-            .attr("dy", LABEL_DY_DEFAULT)
-            .attr("dx", 0)
-            .text(d => d.id)
-            .style("opacity", LABEL_OPACITY_DEFAULT)
-            .style("display", LABEL_DISPLAY)
-            .style("font-size", LABEL_FONT_SIZE + "px");
-
-        node.attr("fill", d => getNodeBaseColor(d)).style("opacity", 1);
-        link.attr("stroke", LINK_BASE_COLOR);
+const elem = document.getElementById("graph");
+const Graph = new ForceGraph(elem);
+const sidebarToggleButton = document.getElementById("sidebar-toggle");
+const sidebarAutoButton = document.getElementById('auto-update-switch');
+const searchInput = document.getElementById('search-input');
+const searchContainer = document.getElementById('sidebar-search');
+const searchSuggestions = document.getElementById('search-suggestions');
+const searchResult = document.getElementById('search-result');
+const abyssOverlay = document.getElementById('abyss');
 
 
-        node.on("mouseover", function (event, d) {
-            d3.select(label.nodes()[nodes.indexOf(d)])
-                .style("opacity", LABEL_OPACITY_HOVER)
-                .attr("dy", LABEL_DY_DEFAULT + LABEL_DY_HOVER);
 
-            d3.select(this).attr("r", NODE_RADIUS_HOVER);
+let searchSuggestionsIndex = -1;
+let searchAllNodes = [];
+let filteredSearchSuggestions = [];
 
-            const neighborIds = new Set([d.id]);
-            links.forEach(l => {
-                if ((l.source.id ? l.source.id : l.source) === d.id) neighborIds.add(l.target.id ? l.target.id : l.target);
-                if ((l.target.id ? l.target.id : l.target) === d.id) neighborIds.add(l.source.id ? l.source.id : l.source);
-            });
+var workingData;
+let zoomLevel = 0;
+let nodeLabelAlphaLevel = '00';
+let nodeLabelFontSizeLevel = 0;
+let linkLabelAlphaLevel = '00';
+let linkLabelFontSizeLevel = 0;
 
-            node
-                .attr("r", n => n.id === d.id ? NODE_RADIUS_HOVER : NODE_RADIUS)
-                .attr("fill", n => n.id === d.id
-                    ? adjustColorBrightness(getNodeBaseColor(n), NODE_BRIGHTEN_FACTOR)
-                    : neighborIds.has(n.id)
-                        ? getNodeBaseColor(n)
-                        : adjustColorBrightness(getNodeBaseColor(n), NODE_DARKEN_FACTOR))
-                .style("opacity", 1);
+const NODE_RELATIVE_RADIUS = 20;
+const GROUPS = [// {name: "test", colour: "#00ff00", radius: 3},
+    {name: "club", colour: "#e0b152", radius: 1.5}, {name: "person", colour: "#df5252", radius: 1}, {
+        name: "default", colour: "#b3b3b3", radius: 1
+    }];
+const LINK_COLOUR = "#3f3f3f";
 
-            link
-                .attr("stroke", l => (l.source.id ? l.source.id : l.source) === d.id || (l.target.id ? l.target.id : l.target) === d.id
-                    ? adjustColorBrightness(LINK_BASE_COLOR, LINK_BRIGHTEN_FACTOR)
-                    : adjustColorBrightness(LINK_BASE_COLOR, LINK_DARKEN_FACTOR));
+const LINK_DISTANCE = 150;
+const LINK_STRENGTH = 2.1;
+const CHARGE_STRENGTH = -700;
+const CENTER_STRENGTH_MIN = 0.025;
+const CENTER_STRENGTH_MAX = 0.045;
+const X_CENTER = window.innerWidth / 2;
+const Y_CENTER = window.innerHeight / 2;
+const ZOOM_TO_FIT_DELAY = 200;
+const ZOOM_TO_FIT_DURATION = 250;
 
-            const zoomOpacity = getZoomOpacity(currentZoom);
-            label
-                .style("opacity", (n) => n.id === d.id ? LABEL_OPACITY_HOVER : neighborIds.has(n.id) ? 0.7 : Math.min(zoomOpacity, LABEL_OPACITY_HOVER_OTHER_MAX))
-                .attr("dy", (n) => n.id === d.id ? LABEL_DY_DEFAULT + LABEL_DY_HOVER : LABEL_DY_DEFAULT);
-        });
-        node.on("mouseout", function (event, d) {
-            const zoomOpacity = getZoomOpacity(currentZoom);
-            d3.select(label.nodes()[nodes.indexOf(d)])
-                .style("opacity", zoomOpacity)
-                .attr("dy", LABEL_DY_DEFAULT);
+function clamp(num, min, max) {
+    return Math.min(Math.max(num, min), max);
+}
 
-            d3.select(this).attr("r", NODE_RADIUS);
+function map(value, inMin, inMax, outMin, outMax) {
+    return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
+}
 
-            node
-                .attr("r", NODE_RADIUS)
-                .attr("fill", n => getNodeBaseColor(n))
-                .style("opacity", 1);
+// coefficients [a0, a1, a2, ...] for a0 + a1*x + a2*x^2 + ...
+function polynomial(x, coefficients) {
+    return coefficients.reduce((acc, coeff, index) => acc + coeff * Math.pow(x, index), 0);
+}
 
-            link.attr("stroke", LINK_BASE_COLOR);
-
-            label
-                .style("opacity", zoomOpacity)
-                .attr("dy", LABEL_DY_DEFAULT);
-        });
-
-        function getZoomOpacity(zoom) {
-            return Math.max(0, Math.min(1, (zoom - ZOOM_OPACITY_MIN) / (ZOOM_OPACITY_MAX - ZOOM_OPACITY_MIN)));
-        }
-
-        function updateLabelsVisibility() {
-            const zoomOpacity = getZoomOpacity(currentZoom);
-            label.style("opacity", zoomOpacity).attr("dy", LABEL_DY_DEFAULT);
-        }
-
-        simulation.on("tick", () => {
-            link
-                .attr("x1", d => d.source.x)
-                .attr("y1", d => d.source.y)
-                .attr("x2", d => d.target.x)
-                .attr("y2", d => d.target.y);
-
-            node
-                .attr("cx", d => d.x)
-                .attr("cy", d => d.y);
-
-            label
-                .attr("x", d => d.x)
-                .attr("y", d => d.y);
-        });
-
-        function drag(simulation) {
-            function onDragStart(event, d) {
-                if (!event.active) simulation.alphaTarget(SIMULATION_ALPHA_ON_DRAG).restart();
-                d.fx = d.x;
-                d.fy = d.y;
-            }
-
-            function onDrag(event, d) {
-                d.fx = event.x;
-                d.fy = event.y;
-            }
-
-            function onDragEnd(event, d) {
-                if (!event.active) simulation.alphaTarget(0);
-                d.fx = null;
-                d.fy = null;
-            }
-
-            return d3.drag()
-                .on("start", onDragStart)
-                .on("drag", onDrag)
-                .on("end", onDragEnd);
-        }
-
-        window.addEventListener('resize', () => {
-            const w = window.innerWidth;
-            const h = window.innerHeight;
-            svg.attr('width', w).attr('height', h);
-            radialForce.x(w / 2).y(h / 2).radius(Math.min(w, h) / 2);
-            simulation.alpha(SIMULATION_ALPHA_ON_RESIZE).restart();
-        });
-
-        function updateSidebarValues() {
-            centerForceValue.textContent = centerForceSlider.value;
-            repelForceValue.textContent = repelForceSlider.value;
-            linkForceValue.textContent = linkForceSlider.value;
-            linkDistanceValue.textContent = linkDistanceSlider.value;
-        }
-
-        updateSidebarValues();
-
-        radialForce.strength(+centerForceSlider.value);
-        repelForce.strength(-Math.abs(+repelForceSlider.value));
-        linkForce.strength(+linkForceSlider.value);
-        linkForce.distance(+linkDistanceSlider.value);
-        simulation.alpha(0.5).restart();
-
-        centerForceSlider.addEventListener('input', function () {
-            radialForce.strength(+this.value);
-            simulation.alpha(0.5).restart();
-            updateSidebarValues();
-        });
-        repelForceSlider.addEventListener('input', function () {
-            repelForce.strength(-Math.abs(+this.value)); // always negative for repulsion
-            simulation.alpha(0.5).restart();
-            updateSidebarValues();
-        });
-        linkForceSlider.addEventListener('input', function () {
-            linkForce.strength(+this.value);
-            simulation.alpha(0.5).restart();
-            updateSidebarValues();
-        });
-        linkDistanceSlider.addEventListener('input', function () {
-            linkForce.distance(+this.value);
-            simulation.alpha(0.5).restart();
-            updateSidebarValues();
-        });
-
-        function debounce(fn, delay) {
-            let timeout;
-            return function (...args) {
-                clearTimeout(timeout);
-                timeout = setTimeout(() => fn.apply(this, args), delay);
-            };
-        }
-
-        // Debounced force slider handlers
-        centerForceSlider.addEventListener('input', debounce(function () {
-            radialForce.strength(+this.value);
-            simulation.alpha(0.5).restart();
-            updateSidebarValues();
-        }, 200));
-        repelForceSlider.addEventListener('input', debounce(function () {
-            repelForce.strength(-Math.abs(+this.value));
-            simulation.alpha(0.5).restart();
-            updateSidebarValues();
-        }, 200));
-        linkForceSlider.addEventListener('input', debounce(function () {
-            linkForce.strength(+this.value);
-            simulation.alpha(0.5).restart();
-            updateSidebarValues();
-        }, 200));
-        linkDistanceSlider.addEventListener('input', debounce(function () {
-            linkForce.distance(+this.value);
-            simulation.alpha(0.5).restart();
-            updateSidebarValues();
-        }, 200));
-
-        sidebarToggle.addEventListener('click', function () {
-            sidebar.classList.toggle('minimized');
-            document.body.classList.toggle('sidebar-minimized');
-            sidebarToggle.textContent = sidebar.classList.contains('minimized') ? '<' : '>';
-        });
-
-        // Node click: show description in sidebar
-        node.on("click", function (event, d) {
-            const descContainer = document.getElementById('node-description-container');
-            const descDiv = document.getElementById('node-description');
-            const nameDiv = document.getElementById('node-name');
-            // Clear previous content
-            nameDiv.textContent = '';
-            if (d.data && d.data.page_link) {
-                const a = document.createElement('a');
-                a.href = BASE_URL + d.data.page_link;
-                a.target = '_blank';
-                a.style.color = 'inherit';
-                a.style.textDecoration = 'underline';
-                a.textContent = d.id;
-                nameDiv.appendChild(a);
-            } else {
-                nameDiv.textContent = d.id;
-            }
-            let html = '';
-            if (d.category === 'person' && d.data) {
-                html += '<b>Club Roles:</b><ul style="margin:0 0 8px 0;">';
-                for (const [club, roles] of Object.entries(d.data.clubs)) {
-                    html += `<li><b>${club}:</b> ${roles.join(', ')}</li>`;
-                }
-                html += '</ul>';
-                if (d.data.profile_html) {
-                    html += `<hr style='margin:8px 0;border:none;border-top:1px solid #444;'>`;
-                    html += `<div style='margin-top:8px;'>${d.data.profile_html}</div>`;
-                }
-            } else if (d.category === 'club' && d.data) {
-                if (d.data.desc_short) {
-                    html += `<div style='margin-bottom:8px;'><b>Description:</b> ${d.data.desc_short}</div>`;
-                }
-                if (d.data.committee) {
-                    html += '<b>Committee:</b><ul style="margin:0;">';
-                    for (const [role, people] of Object.entries(d.data.committee)) {
-                        html += `<li><b>${role}:</b> ${people.map(x => x.name).join(', ')}</li>`;
+function getComponents(nodes, links) {
+    const visited = new Set();
+    const components = [];
+    for (const node of nodes) {
+        if (!visited.has(node.id)) {
+            const queue = [node.id];
+            const comp = [];
+            visited.add(node.id);
+            while (queue.length) {
+                const curr = queue.pop();
+                comp.push(curr);
+                for (const l of links) {
+                    if (l.source === curr && !visited.has(l.target)) {
+                        visited.add(l.target);
+                        queue.push(l.target);
+                    } else if (l.target === curr && !visited.has(l.source)) {
+                        visited.add(l.source);
+                        queue.push(l.source);
                     }
-                    html += '</ul>';
                 }
-            } else {
-                html = '(No data)';
             }
-            descDiv.innerHTML = html;
-            descContainer.style.display = '';
-            // If sidebar is minimized, open it
-            if (sidebar.classList.contains('minimized')) {
-                sidebar.classList.remove('minimized');
-                document.body.classList.remove('sidebar-minimized');
-                sidebarToggle.textContent = '<';
-            }
-        });
-        // Optional: clicking background hides description
-        svg.on('click', function (event) {
-            if (event.target === svg.node()) {
-                document.getElementById('node-description-container').style.display = 'none';
-            }
-        });
-
-        // Search bar logic
-        searchInput.addEventListener('input', function () {
-            const query = this.value.trim().toLowerCase();
-            searchResults.innerHTML = '';
-            if (!query) return;
-            const matches = nodes.filter(n => n.id.toLowerCase().includes(query));
-            if (matches.length === 0) {
-                searchResults.innerHTML = '<div style="color:#aaa;font-size:14px;">No results</div>';
-                return;
-            }
-            matches.slice(0, 20).forEach(n => {
-                const div = document.createElement('div');
-                div.textContent = n.id;
-                div.style.cursor = 'pointer';
-                div.style.padding = '2px 0';
-                div.style.fontSize = '15px';
-                div.style.color = '#ffe';
-                div.addEventListener('click', function (e) {
-                    node.filter(d => d.id === n.id).dispatch('click');
-                    centerViewOnNode(n);
-                    searchResults.innerHTML = '';
-                    searchInput.value = '';
-                });
-                searchResults.appendChild(div);
-            });
-        });
-        // Select top result on Enter
-        searchInput.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') {
-                const query = this.value.trim().toLowerCase();
-                if (!query) return;
-                const matches = nodes.filter(n => n.id.toLowerCase().includes(query));
-                if (matches.length === 0) return;
-                const n = matches[0];
-                node.filter(d => d.id === n.id).dispatch('click');
-                centerViewOnNode(n);
-                searchResults.innerHTML = '';
-                searchInput.value = '';
-            }
-        });
-
-        // Helper to center view on a node
-        function centerViewOnNode(n) {
-            if (typeof n.x !== 'number' || typeof n.y !== 'number') return;
-            const svgEl = d3.select('svg');
-            const w = window.innerWidth, h = window.innerHeight;
-            const k = d3.zoomTransform(svgEl.node()).k;
-            const tx = w / 2 - n.x * k;
-            const ty = h / 2 - n.y * k;
-            svgEl.transition().duration(400).call(
-                zoomBehavior.transform,
-                d3.zoomIdentity.translate(tx, ty).scale(k)
-            );
+            components.push(comp);
         }
-
-        updateLabelsVisibility();
     }
+    return components;
+}
 
-    loadData().then(data => {
-        window.clubGraphData = data;
-        initializeGraph(data.nodes, data.links);
+function getNodeComponentSize(components) {
+    const nodeComponentSize = {};
+    components.forEach(comp => {
+        comp.forEach(id => {
+            nodeComponentSize[id] = comp.length;
+        });
+    });
+    return nodeComponentSize;
+}
+
+function getNormalizedStrength(size, minSize, maxSize) {
+    return CENTER_STRENGTH_MIN + (CENTER_STRENGTH_MAX - CENTER_STRENGTH_MIN) * ((size - minSize) / (maxSize - minSize + 1e-6));
+}
+
+function getQualifyingNodeIds(components, clubs) {
+    const clubIdSet = new Set(clubs.map(c => c.id));
+    const qualifyingNodeIds = new Set();
+    components.forEach(comp => {
+        const clubCount = comp.filter(id => clubIdSet.has(id)).length;
+        if (clubCount > 1) {
+            comp.forEach(id => qualifyingNodeIds.add(id));
+        }
+    });
+    return qualifyingNodeIds;
+}
+
+function getGroupPropertyFromTags(tags, property) {
+    if (Array.isArray(tags) && tags.length > 0) {
+        for (const group of GROUPS) {
+            if (tags.includes(group.name)) {
+                return group[property] || GROUPS.find(g => g.name === "default")[property];
+            }
+        }
+    }
+    // If no tags or no match, use default group
+    const defaultGroup = GROUPS.find(g => g.name === "default");
+    return defaultGroup && defaultGroup[property] ? defaultGroup[property] : undefined;
+}
+
+function alphaToHex(alpha) {
+    return Math.round(alpha * 255).toString(16).padStart(2, '0');
+}
+
+function nodeLabelFontSize(x) {
+    let a = 7.88;
+    let b = -2.53;
+    let c = -23.78;
+    let d = 40.17;
+
+    let y = a * Math.sin(b * x) + c * x + d;
+    let output = clamp(y, 7, 28)
+
+    nodeLabelFontSizeLevel = output;
+    return output;
+}
+
+function nodeLabelOpacity(x) {
+    let y = polynomial(x, [-0.351, 2.063]);
+    let output = clamp(y, 0, 1);
+
+    nodeLabelAlphaLevel = alphaToHex(output);
+    return output;
+}
+
+function linkLabelFontSize(x) {
+    let y = 8;
+    let output = clamp(y, 7, 28);
+
+    linkLabelFontSizeLevel = output;
+    return output;
+}
+
+function linkLabelOpacity(x) {
+    let y = x - 2;
+    let output = clamp(y, 0, 1);
+
+    linkLabelAlphaLevel = alphaToHex(output);
+    return output;
+}
+
+function nodeLabelCanvas(node, ctx) {
+    if (nodeLabelAlphaLevel === '00') return;
+
+    let label = node.name;
+    ctx.font = `${nodeLabelFontSizeLevel}px Inter`;
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = `#dadada${nodeLabelAlphaLevel}`;
+
+    const radius = getGroupPropertyFromTags(node.tags, "radius");
+    const yOffset = (NODE_RELATIVE_RADIUS - 5) * radius + nodeLabelFontSizeLevel;
+    ctx.fillText(label, node.x, node.y + yOffset);
+}
+
+function linkLabelCanvas(link, ctx) {
+    // let label = link.name;
+    // ctx.font = `${linkLabelFontSizeLevel}px Inter`;
+    //
+    // ctx.textAlign = "center";
+    // ctx.textBaseline = "middle";
+    // ctx.fillStyle = `#aaaaaa${linkLabelAlphaLevel}`;
+    // const midX = (link.source.x + link.target.x) / 2;
+    // const midY = (link.source.y + link.target.y) / 2;
+    // ctx.fillText(label, midX, midY);
+
+    if (linkLabelAlphaLevel === '00') return;
+
+    const start = link.source;
+    const end = link.target;
+
+    // if (typeof start !== 'object' || typeof end !== 'object') return;
+
+    const textPos = Object.assign(...['x', 'y'].map(c => ({
+        [c]: start[c] + (end[c] - start[c]) / 2
+    })));
+    const relLink = {x: end.x - start.x, y: end.y - start.y};
+
+
+    let textAngle = Math.atan2(relLink.y, relLink.x);
+    if (textAngle > Math.PI / 2) textAngle = -(Math.PI - textAngle);
+    if (textAngle < -Math.PI / 2) textAngle = -(-Math.PI - textAngle);
+
+    const label = link.name;
+    ctx.font = `${linkLabelFontSizeLevel}px Inter`;
+
+    ctx.save();
+    ctx.translate(textPos.x, textPos.y);
+    ctx.rotate(textAngle);
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = `#dadada${linkLabelAlphaLevel}`;
+    ctx.fillText(label, 0, 0);
+    ctx.restore();
+}
+
+function handleAbyss(zoomLevel) {
+    abyssOverlay.style.opacity = clamp(map(zoomLevel, 50, 150, 0, 1), 0, 1);
+
+    if (zoomLevel > 950) {
+        abyssOverlay.style.opacity = 1;
+        Graph.zoom(0.001);
+        setTimeout(() => {
+            abyssOverlay.style.opacity = 0;
+        }, 400);
+    }
+}
+
+function setupGraph(elem, nodes, links, nodeComponentSize, minSize, maxSize) {
+    Graph.nodeRelSize(20);
+    Graph.nodeVal(n => getGroupPropertyFromTags(n.tags, "radius"));
+    Graph.nodeColor(n => getGroupPropertyFromTags(n.tags, "colour"));
+    Graph.nodeLabel(null);
+    Graph.linkColor(() => LINK_COLOUR);
+    Graph.linkWidth(2);
+    Graph.linkLabel(null);
+
+    Graph.graphData({nodes, links});
+    Graph.d3Force('center', null);
+    Graph.d3Force('link').distance(LINK_DISTANCE).strength(LINK_STRENGTH);
+    Graph.d3Force('charge').strength(CHARGE_STRENGTH);
+    Graph.d3Force('x', d3.forceX().strength(0.04));
+    Graph.d3Force('y', d3.forceY().strength(0.04));
+    Graph.d3Force('x', d3.forceX(X_CENTER)
+        .strength(n => getNormalizedStrength(nodeComponentSize[n.id], minSize, maxSize)));
+    Graph.d3Force('y', d3.forceY(Y_CENTER)
+        .strength(n => getNormalizedStrength(nodeComponentSize[n.id], minSize, maxSize)));
+
+    Graph
+        .nodeCanvasObjectMode(() => 'after')
+        .nodeCanvasObject(nodeLabelCanvas)
+        .linkCanvasObjectMode(() => 'after')
+        .linkCanvasObject(linkLabelCanvas);
+
+    Graph.onZoom(zoom => {
+        if (zoom.k === zoomLevel) return;
+        zoomLevel = zoom.k;
+
+        let nodeFont = nodeLabelFontSize(zoomLevel);
+        let nodeOpacity = nodeLabelOpacity(zoomLevel);
+        let labelFont = linkLabelFontSize(zoomLevel);
+        let labelOpacity = linkLabelOpacity(zoomLevel);
+
+        // let zoomLevelR = zoomLevel.toFixed(2);
+        // let labelFontR = labelFont.toFixed(2);
+        // let labelOpacityR = labelOpacity.toFixed(2);
+        // console.log(`Zoom: ${zoomLevelR}, Font Size: ${labelFontR}, Opacity: ${labelOpacityR}`);
+
+        handleAbyss(zoomLevel);
+    });
+}
+
+function zoomToFitQualifying(qualifyingNodeIds) {
+    setTimeout(() => {
+        Graph.zoomToFit(ZOOM_TO_FIT_DURATION, 0, node => true // qualifyingNodeIds.has(node.id)
+        );
+    }, ZOOM_TO_FIT_DELAY);
+}
+
+function getNodesFromData(data) {
+    if (!data || !Array.isArray(data.nodes)) return [];
+    return data.nodes;
+}
+
+function getLinksFromData(data) {
+    if (!data || !Array.isArray(data.links)) return [];
+    return data.links;
+}
+
+function setupAutoButton() {
+    let autoUpdate = true;
+    sidebarAutoButton.addEventListener('click', () => {
+        autoUpdate = !autoUpdate;
+        sidebarAutoButton.textContent = autoUpdate ? 'AUTO' : 'MANUAL';
+    });
+}
+
+function updateSuggestionsList() {
+    const inputValue = searchInput.value.trim().toLowerCase();
+    filteredSearchSuggestions = inputValue.length === 0 ? [] : searchAllNodes.filter(n => n.name && n.name.toLowerCase().includes(inputValue));
+    searchSuggestions.innerHTML = '';
+    filteredSearchSuggestions.forEach((node, idx) => {
+        const el = document.createElement('div');
+        el.className = 'search-suggestion';
+        el.textContent = node.name;
+        el.addEventListener('mouseenter', () => {
+            searchSuggestionsIndex = idx;
+            updateSuggestionsHighlight();
+        });
+        el.addEventListener('mouseleave', () => {
+            searchSuggestionsIndex = -1;
+            updateSuggestionsHighlight();
+        });
+        el.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            submitSearch(node.name);
+        });
+        searchSuggestions.appendChild(el);
+    });
+    searchSuggestionsIndex = filteredSearchSuggestions.length > 0 ? 0 : -1;
+    updateSuggestionsHighlight();
+}
+
+function updateSuggestionsHighlight() {
+    const suggestions = Array.from(searchSuggestions.getElementsByClassName('search-suggestion'));
+
+    suggestions.forEach((el, idx) => {
+        if (idx === searchSuggestionsIndex) {
+            el.classList.add('selected');
+            el.scrollIntoView({block: 'nearest'});
+        } else {
+            el.classList.remove('selected');
+        }
+    });
+}
+
+function submitSearch(query) {
+    searchInput.value = '';
+    blurSearchInput();
+
+    let nodes = workingData.nodes;
+    let node = nodes.find(n => n.name === query);
+    if (!node) return;
+    let description = node["desc_html"];
+
+    let heading = document.createElement('h2');
+    heading.textContent = node.name;
+
+    let descDiv = document.createElement('div');
+    descDiv.innerHTML = description;
+
+    let separator = document.createElement('hr');
+    separator.classList.add('separator');
+
+    searchResult.innerHTML = '';
+    searchResult.appendChild(heading);
+    searchResult.appendChild(separator);
+    searchResult.appendChild(descDiv);
+
+    Graph.centerAt(node.x, node.y, 600);
+}
+
+function setupSearch() {
+    document.body.addEventListener('keydown', (e) => {
+        if (e.key === '/') {
+            e.preventDefault();
+            if (isSidebarMinimised()) {
+                showSidebar();
+            }
+            if (!isSearchInputFocused()) {
+                searchInput.focus();
+            }
+        }
     });
 
+    searchInput.addEventListener('input', updateSuggestionsList);
+
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (filteredSearchSuggestions.length > 0) {
+                searchSuggestionsIndex = (searchSuggestionsIndex + 1) % filteredSearchSuggestions.length;
+                updateSuggestionsHighlight();
+            }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (filteredSearchSuggestions.length > 0) {
+                searchSuggestionsIndex = (searchSuggestionsIndex - 1 + filteredSearchSuggestions.length) % filteredSearchSuggestions.length;
+                updateSuggestionsHighlight();
+            }
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (filteredSearchSuggestions.length > 0) {
+                if (searchSuggestionsIndex >= 0 && searchSuggestionsIndex < filteredSearchSuggestions.length) {
+                    submitSearch(filteredSearchSuggestions[searchSuggestionsIndex].name, Graph);
+                }
+            }
+        }
+    });
+
+    searchInput.addEventListener('focus', () => focusSearchInput());
+    searchInput.addEventListener('blur', () => blurSearchInput());
 }
+
+function isSearchInputFocused() {
+    return document.activeElement === searchInput;
+}
+
+function focusSearchInput() {
+    searchInput.focus();
+    if (!searchContainer.classList.contains("search-focused")) {
+        searchContainer.classList.add('search-focused');
+    }
+
+    searchSuggestionsIndex = 0;
+    updateSuggestionsList();
+    updateSuggestionsHighlight();
+}
+
+function blurSearchInput() {
+    searchInput.blur();
+    if (searchContainer.classList.contains("search-focused")) {
+        searchContainer.classList.remove('search-focused');
+    }
+
+    searchSuggestionsIndex = 0;
+    updateSuggestionsHighlight();
+}
+
+function setupSidebar() {
+    sidebarToggleButton.addEventListener("click", () => {
+        toggleSidebar();
+    });
+    hideSidebar();
+}
+
+function isSidebarMinimised() {
+    return document.body.classList.contains("sidebar-minimised");
+}
+
+function hideSidebar() {
+    document.body.classList.add("sidebar-minimised");
+
+}
+
+function showSidebar() {
+    document.body.classList.remove("sidebar-minimised");
+}
+
+function toggleSidebar() {
+    document.body.classList.toggle("sidebar-minimised");
+}
+
+async function main() {
+    try {
+        const response = await fetch('/assets/default_data.json');
+        workingData = await response.json();
+    } catch (error) {
+        console.error('Error fetching data:', error);
+        return;
+    }
+    const nodes = getNodesFromData(workingData);
+    searchAllNodes = nodes;
+    const links = getLinksFromData(workingData);
+    const components = getComponents(nodes, links);
+    const nodeComponentSize = getNodeComponentSize(components);
+    const maxSize = Math.max(...components.map(c => c.length));
+    const minSize = Math.min(...components.map(c => c.length));
+    const qualifyingNodeIds = getQualifyingNodeIds(components, nodes.filter(n => n.category === 'club'));
+    setupGraph(elem, nodes, links, nodeComponentSize, minSize, maxSize);
+    // zoomToFitQualifying(qualifyingNodeIds);
+
+    setupSidebar();
+    setupSearch();
+    setupAutoButton();
+}
+
+main();
