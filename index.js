@@ -66,7 +66,7 @@ window.onload = function () {
 
     let currentZoom = 1;
 
-    async function loadData(url = '../clubs_people.json', maxNodes = -1) {
+    async function loadData(url = 'clubs_people.json', maxNodes = -1) {
         const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to load data');
         const data = await response.json();
