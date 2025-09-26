@@ -8,8 +8,6 @@ const searchSuggestions = document.getElementById('search-suggestions');
 const searchResult = document.getElementById('search-result');
 const abyssOverlay = document.getElementById('abyss');
 
-
-
 let searchSuggestionsIndex = -1;
 let searchAllNodes = [];
 let filteredSearchSuggestions = [];
@@ -21,6 +19,7 @@ let nodeLabelFontSizeLevel = 0;
 let linkLabelAlphaLevel = '00';
 let linkLabelFontSizeLevel = 0;
 
+const DATA_FILEPATH = '/umsugraph/assets/default_data.json';
 const NODE_RELATIVE_RADIUS = 20;
 const GROUPS = [// {name: "test", colour: "#00ff00", radius: 3},
     {name: "club", colour: "#e0b152", radius: 1.5}, {name: "person", colour: "#df5252", radius: 1}, {
@@ -454,7 +453,7 @@ function toggleSidebar() {
 
 async function main() {
     try {
-        const response = await fetch('/assets/default_data.json');
+        const response = await fetch(DATA_FILEPATH);
         workingData = await response.json();
     } catch (error) {
         console.error('Error fetching data:', error);
