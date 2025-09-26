@@ -1,3 +1,4 @@
+const DATA_FILEPATH = '/umsugraph/assets/default_data.json';
 const BASE_URL = "//umsu.unimelb.edu.au";
 const NODE_RADIUS = 20;
 const NODE_RADIUS_HOVER = 21;
@@ -67,7 +68,7 @@ window.onload = function () {
 
     let currentZoom = 1;
 
-    async function loadData(url = '/assets/clubs_people.json', maxNodes = -1) {
+    async function loadData(url = DATA_FILEPATH, maxNodes = -1) {
         const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to load data');
         const data = await response.json();
