@@ -1,0 +1,21 @@
+{
+	"nodes": [
+		{
+			"id": 69249, // profile id
+			"name": "Abby Feldman",
+			"tags": ["person"]
+		},
+		{
+			"id": 7053, // grouping id
+			"name": "Jewish Students Society",
+			"tags": ["club"]
+		}
+	],
+	"links": {
+		{
+			"source": 69249,
+			"target": 7053,
+			"name": "President"
+		}
+	}
+}
