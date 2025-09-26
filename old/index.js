@@ -1,4 +1,4 @@
-const DATA_FILEPATH = '/umsugraph/assets/default_data.json';
+const DATA_FILEPATH = '/umsugraph/assets/clubs_people.json';
 const BASE_URL = "//umsu.unimelb.edu.au";
 const NODE_RADIUS = 20;
 const NODE_RADIUS_HOVER = 21;
