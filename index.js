@@ -32,17 +32,14 @@ const XY_STRENGTH_MAX = 0.045;
 let searchSuggestionsIndex = -1;
 let filteredSearchSuggestions = [];
 
-let workingDataset;
+let workingDataset = {};
 let zoomLevel = 0;
 let nodeLabelAlphaLevel = '00';
 let nodeLabelFontSizeLevel = 0;
 let linkLabelAlphaLevel = '00';
 let linkLabelFontSizeLevel = 0;
 
-let datasets = [
-    // {"name": "Example Dataset", "base64": null,},
-    // {"name": "Example Dataset 2", "base64": null,}
-];
+let datasets = [];
 let groups = [{tag: "club", colour: "#e0b152", radius: 1.5}, {tag: "person", colour: "#df5252"},];
 
 function clamp(num, min, max) {
@@ -954,16 +951,6 @@ function getClubSubgraphs(dataset, clubs) {
 }
 
 async function main() {
-
-
-    workingDataset = {
-        nodes: [// {"id": "1", "name": "Node 1", "tags": ["club"], "desc_html": ""},
-            //         // {"id": "2", "name": "Node 2", "tags": ["person"], "desc_html": ""},
-        ], links: []
-    };
-
-
-
 
     setupDatasets();
     setupGraph();
