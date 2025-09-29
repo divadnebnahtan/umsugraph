@@ -1,11 +1,75 @@
 :root {
     --default-font: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Microsoft YaHei Light", sans-serif, serif;
+    /* Main background for body */
+    --color-bg-main: #1e1e1e;
+    /* Sidebar background */
+    --color-sidebar-bg: #1e1e1eE6;
+    /* Sidebar box shadow */
+    --color-sidebar-shadow: #000;
+    /* Sidebar section background */
+    --color-section-bg: #1e1e1e;
+    /* Sidebar section border */
+    --color-section-border: #363636;
+    /* Sidebar section open background */
+    --color-section-bg-open: #1e1e1e;
+    /* Sidebar text */
+    --color-text-main: #fff;
+    /* Sidebar summary text */
+    --color-summary: #fff;
+    /* Search input background */
+    --color-search-input-bg: #2a2a2a;
+    /* Search input border */
+    --color-search-input-border: #363636;
+    /* Search input focus border */
+    --color-search-input-focus: #555555;
+    /* Search input placeholder text */
+    --color-input-placeholder: #666;
+    /* Search suggestion background */
+    --color-suggestion-bg: #262626;
+    /* Search suggestion text */
+    --color-suggestion-text: #fff;
+    /* Search suggestion selected background */
+    --color-suggestion-selected-bg: #343434;
+    /* Search suggestion selected text */
+    --color-suggestion-selected-text: #fff;
+    /* Abyss overlay */
+    --color-abyss: black;
+    /* Separator */
+    --color-separator: #363636;
+    /* Group handle */
+    --color-group-handle: #fff;
+    /* Group input background */
+    --color-group-input-bg: #2a2a2a;
+    /* Group input border */
+    --color-group-input-border: #363636;
+    /* Group input text */
+    --color-group-input-text: #fff;
+    /* Group delete text */
+    --color-group-delete-text: #fff;
+    /* Group delete hover background */
+    --color-group-delete-hover-bg: #2d2d2d;
+    /* Group delete hover text */
+    --color-group-delete-hover-text: #fff;
+    /* Group edit text */
+    --color-group-edit-text: #fff;
+    /* Group edit hover background */
+    --color-group-edit-hover-bg: #2d2d2d;
+    /* Group edit hover text */
+    --color-group-edit-hover-text: #fff;
+    /* Add group button background */
+    --color-add-group-bg: #2a2a2a;
+    /* Add group button text */
+    --color-add-group-text: #fff;
+    /* Add group button hover background */
+    --color-add-group-hover-bg: #3a3a3a;
+    /* Add group button hover text */
+    --color-add-group-hover-text: #fff;
 }
 
 body {
     margin: 0;
-    background-color: #1e1e1e;
-    color: white;
+    background-color: var(--color-bg-main);
+    color: var(--color-text-main);
     font-family: var(--default-font), sans-serif;
 }
 
@@ -24,9 +88,9 @@ details summary::-webkit-details-marker, details summary::marker {
     max-width: 600px;
     height: 100vh;
     gap: 0;
-    background: rgb(30, 30, 30, 0.9);
-    border-left: 1px solid #3f3f3f;
-    box-shadow: 0 0 8px #000;
+    background: var(--color-sidebar-bg);
+    border: none;
+    box-shadow: 0 0 8px var(--color-sidebar-shadow);
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -43,7 +107,7 @@ details summary::-webkit-details-marker, details summary::marker {
     height: 64px;
     background: None;
     border: none;
-    color: #fff;
+    color: var(--color-text-main);
     font-size: 28px;
     z-index: 20;
     transition: right 0.2s;
@@ -82,12 +146,11 @@ body.sidebar-minimised #sidebar-toggle {
 }
 
 .sidebar-section {
-    background: #232323;
-    border: 1px solid #444;
+    background: var(--color-section-bg);
+    border: 1px solid var(--color-section-border);
     border-radius: 0;
     margin-bottom: 0;
     padding: 12px 16px 8px 16px;
-    box-shadow: 0 2px 8px #0002;
 }
 
 .sidebar-section + .sidebar-section {
@@ -96,46 +159,22 @@ body.sidebar-minimised #sidebar-toggle {
 
 .sidebar-section summary {
     font-size: 1.1em;
-    color: #fff;
+    color: var(--color-summary);
     padding: 4px 0;
     cursor: pointer;
 }
 
 .sidebar-section[open] {
-    background: #282828;
+    background: var(--color-section-bg-open);
 }
 
-.sidebar-actions {
-    display: flex;
-    flex-direction: row;
-    width: 100%;
-    gap: 0;
+.sidebar-section[open] summary{
+    margin-bottom: 5px;
 }
 
-.sidebar-action-btn {
-    font-size: 1.2rem;
-    cursor: pointer;
-    transition: background 0.15s;
-    height: 48px;
-    margin: 0;
-    padding: 0;
-    flex: 1 1 0;
-
-    color: #fff;
-    background: #292929;
-    border: 1px solid #444;
-    border-radius: 0;
-    outline: none;
-}
-
-.sidebar-action-btn:active {
-    background: #444;
-}
-
-.sidebar-search {
+.search-section {
     position: relative;
     padding: 12px 16px;
-    background: #232323;
     border-radius: 0 0 12px 12px;
     box-shadow: 0 2px 8px #0002;
     display: flex;
@@ -154,25 +193,29 @@ body.sidebar-minimised #sidebar-toggle {
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
-    padding: 10px 14px;
-    border: 1px solid #444;
-    background: #292929;
-    color: #fff;
-    font-size: 1rem;
+    padding: 0.3em 0.5em;
+    border: 1px solid var(--color-search-input-border);
+    border-radius: 8px;
+    background: var(--color-search-input-bg);
+    color: var(--color-text-main);
     outline: none;
     margin-bottom: 8px;
     transition: border 0.2s;
 }
 
+#search-input::placeholder {
+    color: var(--color-input-placeholder);
+}
+
 #search-input:focus {
-    border-color: #e0b152;
+    border-color: var(--color-search-input-focus);
 }
 
 #search-result {
     position: relative;
     z-index: 1;
-    background: #232323;
-    color: #bdbdbd;
+    background: var(--color-section-bg);
+    color: var(--color-text-main);
     font-size: 0.98rem;
     padding: 8px 12px;
     border-radius: 6px;
@@ -183,30 +226,25 @@ body.sidebar-minimised #sidebar-toggle {
 
 #search-suggestions {
     position: absolute;
-    top: 100%; /* appear directly below the input */
+    top: 100%;
     left: 0;
     width: 100%;
     z-index: 2;
-    /*background: #232323;*/
-    /*box-shadow: 0 2px 8px #0002;*/
-    /*border-radius: 0 0 12px 12px;*/
     flex-direction: column;
-    /*gap: 6px;*/
     max-height: 220px;
     overflow-y: auto;
 
     display: none;
 }
 
-#sidebar-search.search-focused #search-suggestions {
+#search-section.search-focused #search-suggestions {
     display: flex;
 }
 
 .search-suggestion {
     padding: 8px 12px;
-    /*border-radius: 6px;*/
-    background: #282828;
-    color: #dadada;
+    background: var(--color-suggestion-bg);
+    color: var(--color-suggestion-text);
     font-size: 1rem;
     cursor: pointer;
     transition: background 0.2s, color 0.2s;
@@ -214,13 +252,13 @@ body.sidebar-minimised #sidebar-toggle {
 }
 
 .search-suggestion:hover {
-    background: #e0b152;
-    color: #232323;
+    background: var(--color-suggestion-selected-bg);
+    color: var(--color-suggestion-selected-text);
 }
 
 .search-suggestion.selected {
-    background: #e0b152;
-    color: #232323;
+    background: var(--color-suggestion-selected-bg);
+    color: var(--color-suggestion-selected-text);
 }
 
 #abyss {
@@ -229,7 +267,7 @@ body.sidebar-minimised #sidebar-toggle {
     left: 0;
     width: 100vw;
     height: 100vh;
-    background: black;
+    background: var(--color-abyss);
     z-index: 1000;
     pointer-events: none;
     transition: opacity 0.3s;
@@ -239,5 +277,96 @@ body.sidebar-minimised #sidebar-toggle {
 hr.separator {
     margin: 16px 0 8px 0;
     border: none;
-    border-top: 1px solid #444;
+    border-top: 1px solid var(--color-separator);
+}
+
+.group {
+    display: flex;
+    align-items: center;
+    border-radius: 8px;
+    margin-bottom: 0.5em;
+    transition: box-shadow 0.2s, background 0.2s;
+    min-height: 40px;
+    max-height: 40px;
+}
+
+.group .handle {
+    cursor: grab;
+    color: var(--color-group-handle);
+    user-select: none;
+    padding: 0 0.2em;
+}
+
+.group .group-tag-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0.3em 0.5em;
+    border-radius: 8px;
+    border: 1px solid var(--color-group-input-border);
+    background: var(--color-group-input-bg);
+    color: var(--color-group-input-text);
+    margin: 0 0.5em 0 0.2em;
+    outline: none;
+}
+
+.group .group-tag-input::placeholder {
+    color: var(--color-input-placeholder);
+}
+
+.group .group-delete-btn {
+    width: 2em;
+    height: 2em;
+    background: none;
+    border: none;
+    border-radius: 4px;
+    color: var(--color-group-delete-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    margin-left: 0.2em;
+    transition: background 0.2s, color 0.2s;
+}
+
+.group .group-delete-btn:hover {
+    background: var(--color-group-delete-hover-bg);
+    color: var(--color-group-delete-hover-text);
+}
+
+.group .group-edit-btn {
+    width: 2em;
+    height: 2em;
+    background: none;
+    border: none;
+    border-radius: 4px;
+    color: var(--color-group-edit-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    margin-left: 0.2em;
+    transition: background 0.2s, color 0.2s;
+}
+
+.group .group-edit-btn:hover {
+    background: var(--color-group-edit-hover-bg);
+    color: var(--color-group-edit-hover-text);
+}
+
+#add-group-btn {
+    margin-top: 0.5em;
+    width: 100%;
+    background: var(--color-add-group-bg);
+    color: var(--color-add-group-text);
+    border: none;
+    border-radius: 6px;
+    padding: 0.6em 0;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+=
+}
+
+#add-group-btn:hover {
+    background: var(--color-add-group-hover-bg);
+    color: var(--color-add-group-hover-text);
 }

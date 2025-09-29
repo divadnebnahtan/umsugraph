@@ -3,53 +3,46 @@
 <head>
     <title>ForceGraph</title>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
 
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="//cdn.jsdelivr.net/npm/force-graph"></script>
-    <script src="index.js" defer></script>
+    <script src="//cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <script defer src="index.js"></script>
 
-    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+    <link href="/umsugraph/assets/favicon.svg" rel="icon" type="image/svg+xml">
     <link href='//fonts.googleapis.com/css?family=Inter' rel='stylesheet'>
-    <link rel="stylesheet" href="index.css">
+    <link href="index.css" rel="stylesheet">
 </head>
 <body>
 <div id="abyss"></div>
 <button id="sidebar-toggle">☰</button>
 <div id="sidebar">
-    <div class="sidebar-actions">
-        <button id="reset-btn" class="sidebar-action-btn">RESET</button>
-        <button id="auto-update-switch" class="sidebar-action-btn">AUTO</button>
-        <button id="update-btn" class="sidebar-action-btn">UPDATE</button>
-    </div>
     <details class="sidebar-section">
         <summary>Forces</summary>
         <p>SAMPLE TEXT</p>
-        <!-- sliders for all forces-->
     </details>
-    <details class="sidebar-section">
+    <details class="sidebar-section" id="groups-section">
         <summary>Groups</summary>
+        <div id="groups-list"></div>
+        <button id="add-group-btn" type="button">New Group</button>
     </details>
     <details class="sidebar-section">
         <summary>Labels</summary>
-        <!-- sliders for font size and opacity, toggle visibility altogether-->
+        <p>SAMPLE TEXT</p>
     </details>
     <details class="sidebar-section">
         <summary>Data</summary>
+        <p>SAMPLE TEXT</p>
     </details>
-    <div id="sidebar-search">
+    <details class="sidebar-section" id="search-section">
+        <summary>Search</summary>
         <div class="search-input-wrapper">
-            <input type="text" id="search-input" placeholder="Search nodes...">
-            <div id="search-suggestions">
-                <div class="search-suggestion">Chess Club</div>
-                <div class="search-suggestion">Drama Society</div>
-                <div class="search-suggestion">Nathan Smith</div>
-                <div class="search-suggestion">Robotics Team</div>
-                <div class="search-suggestion">Jane Doe</div>
-            </div>
+            <input id="search-input" placeholder="Search nodes..." type="text">
+            <div id="search-suggestions"></div>
         </div>
         <div id="search-result">Search a node to see its description here.</div>
-    </div>
+    </details>
 </div>
 <div id="graph"></div>
 </body>

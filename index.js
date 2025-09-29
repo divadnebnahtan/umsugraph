@@ -1,41 +1,44 @@
 const elem = document.getElementById("graph");
 const Graph = new ForceGraph(elem);
+
 const sidebarToggleButton = document.getElementById("sidebar-toggle");
-const sidebarAutoButton = document.getElementById('auto-update-switch');
+
+const groupsSection = document.getElementById('groups-section');
+const searchSection = document.getElementById('search-section');
+
+const groupsList = document.getElementById('groups-list');
+const addGroupBtn = document.getElementById('add-group-btn');
 const searchInput = document.getElementById('search-input');
-const searchContainer = document.getElementById('sidebar-search');
 const searchSuggestions = document.getElementById('search-suggestions');
 const searchResult = document.getElementById('search-result');
+
 const abyssOverlay = document.getElementById('abyss');
 
+const DATA_FILEPATH = '/umsugraph/assets/default_data.json';
+const NODE_RELATIVE_RADIUS = 20;
+const DEFAULT_GROUP = {name: "default", colour: "#b3b3b3", radius: 1};
+const LINK_COLOUR = "#3f3f3f";
+
+const LINK_DISTANCE = 150;
+const LINK_STRENGTH = 2.1;
+const CHARGE_STRENGTH = -700;
+const XY_STRENGTH_MIN = 0.025;
+const XY_STRENGTH_MAX = 0.045;
+
 let searchSuggestionsIndex = -1;
-let searchAllNodes = [];
 let filteredSearchSuggestions = [];
 
-var workingData;
+let workingData;
 let zoomLevel = 0;
 let nodeLabelAlphaLevel = '00';
 let nodeLabelFontSizeLevel = 0;
 let linkLabelAlphaLevel = '00';
 let linkLabelFontSizeLevel = 0;
 
-const DATA_FILEPATH = '/umsugraph/assets/default_data.json';
-const NODE_RELATIVE_RADIUS = 20;
-const GROUPS = [// {name: "test", colour: "#00ff00", radius: 3},
-    {name: "club", colour: "#e0b152", radius: 1.5}, {name: "person", colour: "#df5252", radius: 1}, {
-        name: "default", colour: "#b3b3b3", radius: 1
-    }];
-const LINK_COLOUR = "#3f3f3f";
-
-const LINK_DISTANCE = 150;
-const LINK_STRENGTH = 2.1;
-const CHARGE_STRENGTH = -700;
-const CENTER_STRENGTH_MIN = 0.025;
-const CENTER_STRENGTH_MAX = 0.045;
-const X_CENTER = window.innerWidth / 2;
-const Y_CENTER = window.innerHeight / 2;
-const ZOOM_TO_FIT_DELAY = 200;
-const ZOOM_TO_FIT_DURATION = 250;
+let groups = [
+    {tag: "club", colour: "#e0b152", radius: 1.5},
+    {tag: "person", colour: "#df5252"},
+];
 
 function clamp(num, min, max) {
     return Math.min(Math.max(num, min), max);
@@ -50,17 +53,19 @@ function polynomial(x, coefficients) {
     return coefficients.reduce((acc, coeff, index) => acc + coeff * Math.pow(x, index), 0);
 }
 
-function getComponents(nodes, links) {
+// Find connected components (subgraphs) in the graph
+// BFS approach
+function getSubgraphs(nodes, links) {
     const visited = new Set();
-    const components = [];
+    const subgraphs = [];
     for (const node of nodes) {
         if (!visited.has(node.id)) {
             const queue = [node.id];
-            const comp = [];
+            const subgraph = [];
             visited.add(node.id);
             while (queue.length) {
                 const curr = queue.pop();
-                comp.push(curr);
+                subgraph.push(curr);
                 for (const l of links) {
                     if (l.source === curr && !visited.has(l.target)) {
                         visited.add(l.target);
@@ -71,49 +76,69 @@ function getComponents(nodes, links) {
                     }
                 }
             }
-            components.push(comp);
+            subgraphs.push(subgraph);
         }
     }
-    return components;
+    return subgraphs;
 }
 
-function getNodeComponentSize(components) {
-    const nodeComponentSize = {};
-    components.forEach(comp => {
-        comp.forEach(id => {
-            nodeComponentSize[id] = comp.length;
+// Calculate "mass" of each subgraph based on node radii
+// Returns an array of masses corresponding to subgraphs, although the subgraphs themselves are not returned
+function getSubgraphMasses(subgraphs, nodes) {
+    // Map node id to node object for quick lookup
+    const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
+    // For each subgraph, sum radius^2 for all nodes
+    return subgraphs.map(comp => {
+        return comp.reduce((sum, id) => {
+            const node = nodeMap[id];
+            const radius = getGroupPropertyFromTags(node.tags, "radius") || 1;
+            return sum + Math.pow(radius, 2);
+        }, 0);
+    });
+}
+
+// Map each node to its subgraph's mass
+// Returns an object mapping node id to mass of its subgraph
+function getNodeSubgraphMass(subgraphs, subgraphMasses) {
+    // Map each node id to its component's mass
+    const nodeSubgraphMass = {};
+    subgraphs.forEach((subgraph, idx) => {
+        subgraph.forEach(id => {
+            nodeSubgraphMass[id] = subgraphMasses[idx];
         });
     });
-    return nodeComponentSize;
+    return nodeSubgraphMass;
 }
 
-function getNormalizedStrength(size, minSize, maxSize) {
-    return CENTER_STRENGTH_MIN + (CENTER_STRENGTH_MAX - CENTER_STRENGTH_MIN) * ((size - minSize) / (maxSize - minSize + 1e-6));
-}
+function getNormalisedSubgraphStrength() {
+    // subgraphs = array of arrays of node ids
+    const subgraphs = getSubgraphs(workingData.nodes, workingData.links);
 
-function getQualifyingNodeIds(components, clubs) {
-    const clubIdSet = new Set(clubs.map(c => c.id));
-    const qualifyingNodeIds = new Set();
-    components.forEach(comp => {
-        const clubCount = comp.filter(id => clubIdSet.has(id)).length;
-        if (clubCount > 1) {
-            comp.forEach(id => qualifyingNodeIds.add(id));
-        }
-    });
-    return qualifyingNodeIds;
+    // subgraphMasses = array of masses corresponding to subgraphs
+    const subgraphMasses = getSubgraphMasses(subgraphs, workingData.nodes);
+
+    // nodeSubgraphMass = object mapping node id to mass of its subgraph
+    const nodeSubgraphMass = getNodeSubgraphMass(subgraphs, subgraphMasses);
+
+    const minMass = Math.min(...subgraphMasses);
+    const maxMass = Math.max(...subgraphMasses);
+
+    // normalisedStrengthByMass = object mapping node id to normalised strength based on its subgraph mass
+    const normalisedStrengthByMass = {};
+    for (const [nodeId, mass] of Object.entries(nodeSubgraphMass)) {
+        normalisedStrengthByMass[nodeId] = map(mass, minMass, maxMass, XY_STRENGTH_MIN, XY_STRENGTH_MAX);
+    }
+    return normalisedStrengthByMass;
 }
 
 function getGroupPropertyFromTags(tags, property) {
-    if (Array.isArray(tags) && tags.length > 0) {
-        for (const group of GROUPS) {
-            if (tags.includes(group.name)) {
-                return group[property] || GROUPS.find(g => g.name === "default")[property];
-            }
+    if (!Array.isArray(tags) || tags.length === 0) return DEFAULT_GROUP[property];
+    for (const group of groups) {
+        if (group[property] !== undefined && tags.includes(group.tag)) {
+            return group[property];
         }
     }
-    // If no tags or no match, use default group
-    const defaultGroup = GROUPS.find(g => g.name === "default");
-    return defaultGroup && defaultGroup[property] ? defaultGroup[property] : undefined;
+    return DEFAULT_GROUP[property];
 }
 
 function alphaToHex(alpha) {
@@ -141,7 +166,7 @@ function nodeLabelOpacity(x) {
     return output;
 }
 
-function linkLabelFontSize(x) {
+function linkLabelFontSize(_x) {
     let y = 8;
     let output = clamp(y, 7, 28);
 
@@ -173,22 +198,11 @@ function nodeLabelCanvas(node, ctx) {
 }
 
 function linkLabelCanvas(link, ctx) {
-    // let label = link.name;
-    // ctx.font = `${linkLabelFontSizeLevel}px Inter`;
-    //
-    // ctx.textAlign = "center";
-    // ctx.textBaseline = "middle";
-    // ctx.fillStyle = `#aaaaaa${linkLabelAlphaLevel}`;
-    // const midX = (link.source.x + link.target.x) / 2;
-    // const midY = (link.source.y + link.target.y) / 2;
-    // ctx.fillText(label, midX, midY);
-
     if (linkLabelAlphaLevel === '00') return;
 
     const start = link.source;
     const end = link.target;
 
-    // if (typeof start !== 'object' || typeof end !== 'object') return;
 
     const textPos = Object.assign(...['x', 'y'].map(c => ({
         [c]: start[c] + (end[c] - start[c]) / 2
@@ -226,78 +240,9 @@ function handleAbyss(zoomLevel) {
     }
 }
 
-function setupGraph(elem, nodes, links, nodeComponentSize, minSize, maxSize) {
-    Graph.nodeRelSize(20);
-    Graph.nodeVal(n => getGroupPropertyFromTags(n.tags, "radius"));
-    Graph.nodeColor(n => getGroupPropertyFromTags(n.tags, "colour"));
-    Graph.nodeLabel(null);
-    Graph.linkColor(() => LINK_COLOUR);
-    Graph.linkWidth(2);
-    Graph.linkLabel(null);
-
-    Graph.graphData({nodes, links});
-    Graph.d3Force('center', null);
-    Graph.d3Force('link').distance(LINK_DISTANCE).strength(LINK_STRENGTH);
-    Graph.d3Force('charge').strength(CHARGE_STRENGTH);
-    Graph.d3Force('x', d3.forceX().strength(0.04));
-    Graph.d3Force('y', d3.forceY().strength(0.04));
-    Graph.d3Force('x', d3.forceX(X_CENTER)
-        .strength(n => getNormalizedStrength(nodeComponentSize[n.id], minSize, maxSize)));
-    Graph.d3Force('y', d3.forceY(Y_CENTER)
-        .strength(n => getNormalizedStrength(nodeComponentSize[n.id], minSize, maxSize)));
-
-    Graph
-        .nodeCanvasObjectMode(() => 'after')
-        .nodeCanvasObject(nodeLabelCanvas)
-        .linkCanvasObjectMode(() => 'after')
-        .linkCanvasObject(linkLabelCanvas);
-
-    Graph.onZoom(zoom => {
-        if (zoom.k === zoomLevel) return;
-        zoomLevel = zoom.k;
-
-        let nodeFont = nodeLabelFontSize(zoomLevel);
-        let nodeOpacity = nodeLabelOpacity(zoomLevel);
-        let labelFont = linkLabelFontSize(zoomLevel);
-        let labelOpacity = linkLabelOpacity(zoomLevel);
-
-        // let zoomLevelR = zoomLevel.toFixed(2);
-        // let labelFontR = labelFont.toFixed(2);
-        // let labelOpacityR = labelOpacity.toFixed(2);
-        // console.log(`Zoom: ${zoomLevelR}, Font Size: ${labelFontR}, Opacity: ${labelOpacityR}`);
-
-        handleAbyss(zoomLevel);
-    });
-}
-
-function zoomToFitQualifying(qualifyingNodeIds) {
-    setTimeout(() => {
-        Graph.zoomToFit(ZOOM_TO_FIT_DURATION, 0, node => true // qualifyingNodeIds.has(node.id)
-        );
-    }, ZOOM_TO_FIT_DELAY);
-}
-
-function getNodesFromData(data) {
-    if (!data || !Array.isArray(data.nodes)) return [];
-    return data.nodes;
-}
-
-function getLinksFromData(data) {
-    if (!data || !Array.isArray(data.links)) return [];
-    return data.links;
-}
-
-function setupAutoButton() {
-    let autoUpdate = true;
-    sidebarAutoButton.addEventListener('click', () => {
-        autoUpdate = !autoUpdate;
-        sidebarAutoButton.textContent = autoUpdate ? 'AUTO' : 'MANUAL';
-    });
-}
-
 function updateSuggestionsList() {
     const inputValue = searchInput.value.trim().toLowerCase();
-    filteredSearchSuggestions = inputValue.length === 0 ? [] : searchAllNodes.filter(n => n.name && n.name.toLowerCase().includes(inputValue));
+    filteredSearchSuggestions = inputValue.length === 0 ? [] : workingData.nodes.filter(n => n.name && n.name.toLowerCase().includes(inputValue));
     searchSuggestions.innerHTML = '';
     filteredSearchSuggestions.forEach((node, idx) => {
         const el = document.createElement('div');
@@ -313,7 +258,7 @@ function updateSuggestionsList() {
         });
         el.addEventListener('mousedown', (e) => {
             e.preventDefault();
-            submitSearch(node.name);
+            searchSubmit(node.name);
         });
         searchSuggestions.appendChild(el);
     });
@@ -334,13 +279,21 @@ function updateSuggestionsHighlight() {
     });
 }
 
-function submitSearch(query) {
+function searchSubmit(query) {
     searchInput.value = '';
     blurSearchInput();
 
+    showSearchResult(query);
+
     let nodes = workingData.nodes;
     let node = nodes.find(n => n.name === query);
-    if (!node) return;
+
+    Graph.centerAt(node.x, node.y, 600);
+}
+
+function showSearchResult(query) {
+    let nodes = workingData.nodes;
+    let node = nodes.find(n => n.name === query);
     let description = node["desc_html"];
 
     let heading = document.createElement('h2');
@@ -352,12 +305,11 @@ function submitSearch(query) {
     let separator = document.createElement('hr');
     separator.classList.add('separator');
 
+    openSidebarSection(searchSection);
     searchResult.innerHTML = '';
     searchResult.appendChild(heading);
     searchResult.appendChild(separator);
     searchResult.appendChild(descDiv);
-
-    Graph.centerAt(node.x, node.y, 600);
 }
 
 function setupSearch() {
@@ -369,6 +321,11 @@ function setupSearch() {
             }
             if (!isSearchInputFocused()) {
                 searchInput.focus();
+            }
+        } else if (e.key === 'Escape') {
+            // Close the sidebar on Escape
+            if (!isSidebarMinimised()) {
+                hideSidebar();
             }
         }
     });
@@ -392,7 +349,7 @@ function setupSearch() {
             e.preventDefault();
             if (filteredSearchSuggestions.length > 0) {
                 if (searchSuggestionsIndex >= 0 && searchSuggestionsIndex < filteredSearchSuggestions.length) {
-                    submitSearch(filteredSearchSuggestions[searchSuggestionsIndex].name, Graph);
+                    searchSubmit(filteredSearchSuggestions[searchSuggestionsIndex].name, Graph);
                 }
             }
         }
@@ -408,8 +365,8 @@ function isSearchInputFocused() {
 
 function focusSearchInput() {
     searchInput.focus();
-    if (!searchContainer.classList.contains("search-focused")) {
-        searchContainer.classList.add('search-focused');
+    if (!searchSection.classList.contains("search-focused")) {
+        searchSection.classList.add('search-focused');
     }
 
     searchSuggestionsIndex = 0;
@@ -419,19 +376,232 @@ function focusSearchInput() {
 
 function blurSearchInput() {
     searchInput.blur();
-    if (searchContainer.classList.contains("search-focused")) {
-        searchContainer.classList.remove('search-focused');
+    if (searchSection.classList.contains("search-focused")) {
+        searchSection.classList.remove('search-focused');
     }
 
     searchSuggestionsIndex = 0;
     updateSuggestionsHighlight();
 }
 
+function renderGroups() {
+    groupsList.innerHTML = '';
+    groups.forEach((group, idx) => {
+        const groupDiv = document.createElement('div');
+        groupDiv.className = 'group';
+        groupDiv.setAttribute('data-group-idx', idx);
+
+        // Handle
+        const handle = document.createElement('span');
+        handle.className = 'handle';
+        handle.innerHTML = '&#x283F;';
+
+        // Tag input
+        const tagInput = document.createElement('input');
+        tagInput.className = 'group-tag-input ignore-elements';
+        tagInput.type = 'text';
+        tagInput.placeholder = 'Tag...';
+        tagInput.value = group.tag;
+        tagInput.addEventListener('input', e => {
+            group.tag = e.target.value;
+            refreshGraph();
+        });
+
+        // Add property button
+        const editBtn = document.createElement('button');
+        editBtn.className = 'group-edit-btn ignore-elements';
+        editBtn.title = 'Add property';
+        editBtn.innerHTML = '&#x270E;';
+        editBtn.addEventListener('click', () => {
+            createGroupPropertyModal(group, renderGroups);
+        });
+
+        // Delete button
+        const delBtn = document.createElement('button');
+        delBtn.className = 'group-delete-btn ignore-elements';
+        delBtn.title = 'Delete group';
+        delBtn.textContent = '✕';
+        delBtn.addEventListener('click', () => {
+            groups.splice(idx, 1);
+            renderGroups();
+        });
+
+        groupDiv.appendChild(handle);
+        groupDiv.appendChild(tagInput);
+        groupDiv.appendChild(editBtn);
+        groupDiv.appendChild(delBtn);
+        groupsList.appendChild(groupDiv);
+    });
+    refreshGraph();
+}
+
+function createGroupPropertyModal(group, onClose) {
+    // Remove existing modal if present
+    const existingModal = document.getElementById('group-property-modal');
+    if (existingModal) existingModal.remove();
+
+    // Modal overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'group-property-modal';
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100vw';
+    overlay.style.height = '100vh';
+    overlay.style.background = 'rgba(0,0,0,0.3)';
+    overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.zIndex = '9999';
+
+    // Modal box
+    const modal = document.createElement('div');
+    modal.style.background = '#222';
+    modal.style.padding = '24px 20px 16px 20px';
+    modal.style.borderRadius = '10px';
+    modal.style.minWidth = '320px';
+    modal.style.boxShadow = '0 2px 16px #0008';
+    modal.style.color = '#dadada';
+
+    // Title
+    const title = document.createElement('h3');
+    title.textContent = 'Edit Group Properties (W.I.P)';
+    title.style.marginTop = '0';
+    modal.appendChild(title);
+
+    // List of current properties
+    const propsDiv = document.createElement('div');
+    propsDiv.style.marginBottom = '12px';
+    function renderProps() {
+        propsDiv.innerHTML = '';
+        const propKeys = Object.keys(group).filter(k => k === 'colour' || k === 'radius');
+        if (propKeys.length === 0) {
+            propsDiv.textContent = 'No properties set.';
+        } else {
+            propKeys.forEach(key => {
+                const row = document.createElement('div');
+                row.style.display = 'flex';
+                row.style.alignItems = 'center';
+                row.style.marginBottom = '6px';
+                // Label
+                const label = document.createElement('span');
+                label.textContent = key.charAt(0).toUpperCase() + key.slice(1) + ': ';
+                label.style.width = '70px';
+                // Input
+                let input;
+                if (key === 'colour') {
+                    input = document.createElement('input');
+                    input.type = 'color';
+                    input.value = group.colour || '#b3b3b3';
+                    input.addEventListener('input', e => {
+                        group.colour = e.target.value;
+                        refreshGraph();
+                    });
+                } else if (key === 'radius') {
+                    input = document.createElement('input');
+                    input.type = 'number';
+                    input.min = '0.1';
+                    input.step = '0.1';
+                    input.value = group.radius || 1;
+                    input.style.width = '60px';
+                    input.addEventListener('input', e => {
+                        group.radius = parseFloat(e.target.value) || 1;
+                        refreshGraph();
+                    });
+                }
+                // Remove button
+                const removeBtn = document.createElement('button');
+                removeBtn.textContent = 'Remove';
+                removeBtn.style.marginLeft = '10px';
+                removeBtn.addEventListener('click', () => {
+                    delete group[key];
+                    renderProps();
+                    refreshGraph();
+                });
+                row.appendChild(label);
+                row.appendChild(input);
+                row.appendChild(removeBtn);
+                propsDiv.appendChild(row);
+            });
+        }
+    }
+    renderProps();
+    modal.appendChild(propsDiv);
+
+    // Add property section
+    const addPropDiv = document.createElement('div');
+    addPropDiv.style.display = 'flex';
+    addPropDiv.style.alignItems = 'center';
+    addPropDiv.style.marginBottom = '10px';
+    const propSelect = document.createElement('select');
+    propSelect.innerHTML = '<option value="">Add property...</option>' +
+        '<option value="colour">Colour</option>' +
+        '<option value="radius">Radius</option>';
+    const addBtn = document.createElement('button');
+    addBtn.textContent = 'Add';
+    addBtn.style.marginLeft = '8px';
+    addBtn.addEventListener('click', () => {
+        const val = propSelect.value;
+        if (!val) return;
+        if (val === 'colour' && !group.colour) {
+            group.colour = '#b3b3b3';
+        } else if (val === 'radius' && !group.radius) {
+            group.radius = 1;
+        }
+        renderProps();
+        refreshGraph();
+        propSelect.value = '';
+    });
+    addPropDiv.appendChild(propSelect);
+    addPropDiv.appendChild(addBtn);
+    modal.appendChild(addPropDiv);
+
+    // Close button
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Close';
+    closeBtn.style.marginTop = '10px';
+    closeBtn.style.float = 'right';
+    closeBtn.addEventListener('click', () => {
+        overlay.remove();
+        if (onClose) onClose();
+    });
+    modal.appendChild(closeBtn);
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+}
+
+function setupGroups() {
+    addGroupBtn.addEventListener('click', () => {
+        groups.push({tag: ''});
+        renderGroups();
+    });
+
+    renderGroups();
+
+    new Sortable(groupsList, {
+        filter: '.ignore-elements',
+        preventOnFilter: false,
+        animation: 150,
+        onUpdate: (evt) => {
+            const newGroups = [];
+            const groupDivs = Array.from(groupsList.children);
+            groupDivs.forEach(div => {
+                const origIdx = parseInt(div.getAttribute('data-group-idx'), 10);
+                newGroups.push(groups[origIdx]);
+            });
+            groups = newGroups;
+            renderGroups();
+        }
+    });
+}
+
 function setupSidebar() {
     sidebarToggleButton.addEventListener("click", () => {
         toggleSidebar();
     });
-    hideSidebar();
+    // hideSidebar();
+    openSidebarSection(groupsSection);
 }
 
 function isSidebarMinimised() {
@@ -451,6 +621,74 @@ function toggleSidebar() {
     document.body.classList.toggle("sidebar-minimised");
 }
 
+function openSidebarSection(section) {
+    section.setAttribute('open', '');
+}
+
+function closeSidebarSection(section) {
+    section.removeAttribute('open');
+}
+
+function graphOnZoom(zoom) {
+    if (zoom.k === zoomLevel) return;
+    zoomLevel = zoom.k;
+
+    let nodeFont = nodeLabelFontSize(zoomLevel);
+    let nodeOpacity = nodeLabelOpacity(zoomLevel);
+    let labelFont = linkLabelFontSize(zoomLevel);
+    let labelOpacity = linkLabelOpacity(zoomLevel);
+
+    // let zoomLevelR = zoomLevel.toFixed(2);
+    // let labelFontR = labelFont.toFixed(2);
+    // let labelOpacityR = labelOpacity.toFixed(2);
+    // console.log(`Zoom: ${zoomLevelR}, Font Size: ${labelFontR}, Opacity: ${labelOpacityR}`);
+
+    handleAbyss(zoomLevel);
+}
+
+function graphOnNodeClick(node, _event) {
+    showSidebar();
+    showSearchResult(node.name);
+}
+
+function graphOnBackgroundClick(event) {
+
+}
+
+function refreshGraph() {
+    Graph.nodeVal(n => getGroupPropertyFromTags(n.tags, "radius"));
+    Graph.nodeColor(n => getGroupPropertyFromTags(n.tags, "colour"));
+}
+
+function setupGraph() {
+    Graph.nodeRelSize(20);
+    Graph.nodeLabel(null);
+    Graph.linkColor(() => LINK_COLOUR);
+    Graph.linkWidth(2);
+    Graph.linkLabel(null);
+
+    Graph.graphData(workingData);
+    Graph.d3Force('center', null);
+    Graph.d3Force('link').distance(LINK_DISTANCE).strength(LINK_STRENGTH);
+    Graph.d3Force('charge').strength(CHARGE_STRENGTH);
+
+    const normalisedStrengthByMass = getNormalisedSubgraphStrength();
+    Graph.d3Force('x', d3.forceX(window.innerWidth / 2).strength(n => normalisedStrengthByMass[n.id]));
+    Graph.d3Force('y', d3.forceY(window.innerHeight / 2).strength(n => normalisedStrengthByMass[n.id]));
+
+    Graph
+        .nodeCanvasObjectMode(() => 'after')
+        .nodeCanvasObject(nodeLabelCanvas)
+        .linkCanvasObjectMode(() => 'after')
+        .linkCanvasObject(linkLabelCanvas);
+
+    Graph.onZoom(graphOnZoom);
+    Graph.onNodeClick(graphOnNodeClick);
+    Graph.onBackgroundClick(graphOnBackgroundClick);
+
+    refreshGraph();
+}
+
 async function main() {
     try {
         const response = await fetch(DATA_FILEPATH);
@@ -459,20 +697,11 @@ async function main() {
         console.error('Error fetching data:', error);
         return;
     }
-    const nodes = getNodesFromData(workingData);
-    searchAllNodes = nodes;
-    const links = getLinksFromData(workingData);
-    const components = getComponents(nodes, links);
-    const nodeComponentSize = getNodeComponentSize(components);
-    const maxSize = Math.max(...components.map(c => c.length));
-    const minSize = Math.min(...components.map(c => c.length));
-    const qualifyingNodeIds = getQualifyingNodeIds(components, nodes.filter(n => n.category === 'club'));
-    setupGraph(elem, nodes, links, nodeComponentSize, minSize, maxSize);
-    // zoomToFitQualifying(qualifyingNodeIds);
 
+    setupGraph();
     setupSidebar();
+    setupGroups();
     setupSearch();
-    setupAutoButton();
 }
 
 main();
