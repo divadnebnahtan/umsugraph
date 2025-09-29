@@ -30,6 +30,7 @@ Immediate task: Storage
 - think about ways to improve each entry in the dataset list
   - do they really need to be renamable?
   - should each dataset have a download button or leave it all to the storage section?
+- Important: Merge needs to be more robust - breaks when you add incremental files without the base file
 
 ### Data (Generation)
 - improve desc_html on data side

@@ -250,6 +250,7 @@ function handleAbyss(zoomLevel) {
 }
 
 function updateSuggestionsList() {
+    if (!workingDataset || !workingDataset.nodes || workingDataset.nodes.length === 0) return;
     const inputValue = searchInput.value.trim().toLowerCase();
     filteredSearchSuggestions = inputValue.length === 0 ? [] : workingDataset.nodes.filter(n => n.name && n.name.toLowerCase().includes(inputValue));
     searchSuggestions.innerHTML = '';
@@ -289,21 +290,29 @@ function updateSuggestionsHighlight() {
 }
 
 function searchSubmit(query) {
+    if (!workingDataset || !Array.isArray(workingDataset.nodes) || workingDataset.nodes.length === 0) {
+        return;
+    }
     searchInput.value = '';
     blurSearchInput();
-
     showSearchResult(query);
-
     let nodes = workingDataset.nodes;
     let node = nodes.find(n => n.name === query);
-
     Graph.centerAt(node.x, node.y, 600);
 }
 
 function showSearchResult(query) {
+    if (!workingDataset || !Array.isArray(workingDataset.nodes) || workingDataset.nodes.length === 0) {
+        searchResult.innerHTML = '<div class="empty-message">No datasets loaded. Please add a dataset to use search.</div>';
+        return;
+    }
     let nodes = workingDataset.nodes;
     let node = nodes.find(n => n.name === query);
-    let links = workingDataset.links.filter(l => l.source.id === node.id || l.target.id === node.id);
+    if (!node) {
+        searchResult.innerHTML = '<div class="empty-message">No matching node found.</div>';
+        return;
+    }
+    let links = (workingDataset.links || []).filter(l => l.source.id === node.id || l.target.id === node.id);
     let description = node["desc_html"];
 
     let heading = document.createElement('h2');
@@ -687,17 +696,29 @@ function graphOnBackgroundClick(_event) {
 }
 
 function refreshGraph() {
+    if (!workingDataset || !Array.isArray(workingDataset.nodes) || workingDataset.nodes.length === 0) {
+        // Graph.clear(); does not exist
+        // elem.innerHTML = '<div class="empty-message" style="text-align:center;padding:2em;">No datasets loaded.<br>Please add a dataset to view the graph.</div>';
+        return;
+    }
     Graph.nodeVal(n => getGroupPropertyFromTags(n.tags, "radius"));
     Graph.nodeColor(n => getGroupPropertyFromTags(n.tags, "colour"));
 }
 
 function refreshGraphData() {
-    Graph.graphData(workingDataset);
+    // Always provide a valid structure to ForceGraph
+    const safeDataset = {
+        nodes: Array.isArray(workingDataset.nodes) ? workingDataset.nodes : [],
+        links: Array.isArray(workingDataset.links) ? workingDataset.links : []
+    };
+    Graph.graphData(safeDataset);
 
-    const normalisedStrengthByMass = getNormalisedSubgraphStrength();
-    Graph.d3Force('x', d3.forceX(0).strength(n => normalisedStrengthByMass[n.id]));
-    Graph.d3Force('y', d3.forceY(0).strength(n => normalisedStrengthByMass[n.id]));
-
+    // Only run subgraph logic if there are nodes
+    if (safeDataset.nodes.length > 0 && safeDataset.links.length > 0) {
+        const normalisedStrengthByMass = getNormalisedSubgraphStrength();
+        Graph.d3Force('x', d3.forceX(0).strength(n => normalisedStrengthByMass[n.id]));
+        Graph.d3Force('y', d3.forceY(0).strength(n => normalisedStrengthByMass[n.id]));
+    }
     refreshGraph();
 }
 
@@ -708,14 +729,9 @@ function setupGraph() {
     Graph.linkWidth(2);
     Graph.linkLabel(null);
 
-    Graph.graphData(workingDataset);
     Graph.d3Force('center', null);
     Graph.d3Force('link').distance(LINK_DISTANCE).strength(LINK_STRENGTH);
     Graph.d3Force('charge').strength(CHARGE_STRENGTH);
-
-    const normalisedStrengthByMass = getNormalisedSubgraphStrength();
-    Graph.d3Force('x', d3.forceX(0).strength(n => normalisedStrengthByMass[n.id]));
-    Graph.d3Force('y', d3.forceY(0).strength(n => normalisedStrengthByMass[n.id]));
 
     Graph
         .nodeCanvasObjectMode(() => 'after')
@@ -728,6 +744,7 @@ function setupGraph() {
     Graph.onBackgroundClick(graphOnBackgroundClick);
 
     refreshGraph();
+    refreshGraphData();
 }
 
 function setupDatasets() {
@@ -781,12 +798,9 @@ function updateDatasets() {
     }).filter(ds => ds !== null);
 
     const merged = mergeDatasets(decodedDatasets);
-    if (merged) {
+    if (merged && Array.isArray(merged.nodes) && Array.isArray(merged.links)) {
         workingDataset = merged;
-        // console.log('Merged dataset:', JSON.stringify(workingDataset, null, 2));
         refreshGraphData();
-    } else {
-        console.error('Failed to merge datasets.');
     }
 }
 
@@ -826,8 +840,7 @@ function refreshDatasetList() {
 // this function merges them into one dataset
 function mergeDatasets(datasets) {
     if (!Array.isArray(datasets) || datasets.length === 0) {
-        console.error('No data sources provided.');
-        return;
+        return {nodes: [], links: []};
     }
 
     // Priority: last in array is highest, so process in reverse
@@ -950,14 +963,9 @@ function getClubSubgraphs(dataset, clubs) {
     return {nodes: newNodes, links: newLinks};
 }
 
-async function main() {
 
-    setupDatasets();
-    setupGraph();
-    setupGroups();
-    setupSidebar();
-    setupSearch();
-
-}
-
-main();
+setupDatasets();
+setupGraph();
+setupGroups();
+setupSidebar();
+setupSearch();
