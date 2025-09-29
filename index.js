@@ -652,7 +652,7 @@ function graphOnNodeClick(node, _event) {
 }
 
 function graphOnBackgroundClick(event) {
-
+    hideSidebar();
 }
 
 function refreshGraph() {
