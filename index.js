@@ -294,10 +294,51 @@ function searchSubmit(query) {
 function showSearchResult(query) {
     let nodes = workingData.nodes;
     let node = nodes.find(n => n.name === query);
+    let links = workingData.links.filter(l => l.source.id === node.id || l.target.id === node.id);
     let description = node["desc_html"];
 
     let heading = document.createElement('h2');
     heading.textContent = node.name;
+
+    // Group links by their name
+    const linksByName = {};
+    links.forEach(l => {
+        const linkName = l.name || '(no label)';
+        if (!linksByName[linkName]) linksByName[linkName] = [];
+        linksByName[linkName].push(l);
+    });
+
+    let linksUl = document.createElement('div');
+    linksUl.classList.add('node-links');
+    Object.entries(linksByName).forEach(([linkName, groupLinks]) => {
+        // Parent div for the link name
+        const groupDiv = document.createElement('div');
+        groupDiv.classList.add('node-link-group');
+        // Link name as heading/label
+        const linkLabel = document.createElement('div');
+        linkLabel.classList.add('link-label');
+        linkLabel.textContent = linkName;
+        groupDiv.appendChild(linkLabel);
+        // Bullet list for other node names
+        const ul = document.createElement('ul');
+        ul.style.margin = '0 0 0 1.5em';
+        groupLinks.forEach(l => {
+            let otherNodeId = l.source.id === node.id ? l.target.id : l.source.id;
+            let otherNode = nodes.find(n => n.id === otherNodeId);
+            let li = document.createElement('li');
+            let otherNodeLink = document.createElement('a');
+            otherNodeLink.href = '#';
+            otherNodeLink.textContent = otherNode.name || '(no name)';
+            otherNodeLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                searchSubmit(otherNode.name, Graph);
+            });
+            li.appendChild(otherNodeLink);
+            ul.appendChild(li);
+        });
+        groupDiv.appendChild(ul);
+        linksUl.appendChild(groupDiv);
+    });
 
     let descDiv = document.createElement('div');
     descDiv.innerHTML = description;
@@ -308,6 +349,7 @@ function showSearchResult(query) {
     openSidebarSection(searchSection);
     searchResult.innerHTML = '';
     searchResult.appendChild(heading);
+    searchResult.appendChild(linksUl);
     searchResult.appendChild(separator);
     searchResult.appendChild(descDiv);
 }
@@ -651,7 +693,7 @@ function graphOnNodeClick(node, _event) {
     showSearchResult(node.name);
 }
 
-function graphOnBackgroundClick(event) {
+function graphOnBackgroundClick(_event) {
     hideSidebar();
 }
 

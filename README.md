@@ -25,7 +25,7 @@
 
 ### Labels
 - sliders for font size and opacity for nodes and links based on zoom level
-- node size, link width, link colour, cbs allowing for full theme customisation
+- cbs allowing for full theme customisation
 
 ### Data (Sidebar)
 - download currently used data
@@ -47,8 +47,7 @@
 
 ### Search
 - get feedback on styling
-- fuzzy search
+- fuzzy search. do i even need it?
 - advanced filters (tags, degree, ...)
 - temp highlight search result node
-- IMPORTANT: results must show the roles of the person/club
 

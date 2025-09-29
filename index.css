@@ -199,7 +199,7 @@ body.sidebar-minimised #sidebar-toggle {
     background: var(--color-search-input-bg);
     color: var(--color-text-main);
     outline: none;
-    margin-bottom: 8px;
+    margin: 10px 0;
     transition: border 0.2s;
 }
 
@@ -363,10 +363,38 @@ hr.separator {
     padding: 0.6em 0;
     cursor: pointer;
     transition: background 0.2s, color 0.2s;
-=
 }
 
 #add-group-btn:hover {
     background: var(--color-add-group-hover-bg);
     color: var(--color-add-group-hover-text);
+}
+
+/* Prevent mobile zoom on input fields by setting minimum font size */
+input, textarea, select {
+    font-size: 16px;
+}
+
+/* Style for search results' bullet points and links */
+.node-links ul {
+    margin-left: 0;
+    padding-left: 0;
+    font-size: 0.95em;
+}
+.node-links ul li {
+    list-style-position: inside;
+    margin-left: 0;
+    padding-left: 0;
+}
+.node-links ul li a {
+    color: var(--color-text-main);
+    text-decoration: underline dotted;
+    font-size: inherit;
+}
+
+#profile_main {
+    font-size: calc(100% - 4px);
+}
+#profile_main * {
+    font-size: inherit !important;
 }
