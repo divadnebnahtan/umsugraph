@@ -31,9 +31,13 @@
         <summary>Labels</summary>
         <p>SAMPLE TEXT</p>
     </details>
-    <details class="sidebar-section">
+    <details class="sidebar-section" id="data-section">
         <summary>Data</summary>
-        <div id="data-list"></div>
+        <div id="dataset-list">
+        </div>
+        <label for="upload-dataset-btn" class="custom-file-upload">Upload File</label>
+        <input id="upload-dataset-btn" type="file" accept="application/JSON" multiple>
+        <button id="update-datasets-btn" type="button">Update</button>
     </details>
     <details class="sidebar-section" id="search-section">
         <summary>Search</summary>

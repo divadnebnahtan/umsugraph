@@ -80,6 +80,21 @@ details summary::-webkit-details-marker, details summary::marker {
     color: transparent !important;
 }
 
+hr.separator {
+    margin: 16px 0 8px 0;
+    border: none;
+    border-top: 1px solid var(--color-separator);
+}
+
+input[type="file"] {
+    display: none;
+}
+
+/* Prevent mobile zoom on input fields by setting minimum font size */
+input, textarea, select {
+    font-size: 16px;
+}
+
 #sidebar {
     position: fixed;
     top: 0;
@@ -168,7 +183,7 @@ body.sidebar-minimised #sidebar-toggle {
     background: var(--color-section-bg-open);
 }
 
-.sidebar-section[open] summary{
+.sidebar-section[open] summary {
     margin-bottom: 5px;
 }
 
@@ -271,13 +286,7 @@ body.sidebar-minimised #sidebar-toggle {
     z-index: 1000;
     pointer-events: none;
     transition: opacity 0.3s;
-
-}
-
-hr.separator {
-    margin: 16px 0 8px 0;
-    border: none;
-    border-top: 1px solid var(--color-separator);
+    opacity: 0;
 }
 
 .group {
@@ -370,9 +379,42 @@ hr.separator {
     color: var(--color-add-group-hover-text);
 }
 
-/* Prevent mobile zoom on input fields by setting minimum font size */
-input, textarea, select {
-    font-size: 16px;
+/* Style for the custom file upload label (Add Data button) */
+label[for=upload-dataset-btn] {
+    display: inline-block;
+    padding: 8px 18px;
+    cursor: pointer;
+    background: var(--color-add-group-bg);
+    color: var(--color-add-group-text);
+    border-radius: 6px;
+    font-size: 1em;
+    border: 1px solid var(--color-section-border);
+    margin: 8px 0 8px 0;
+    transition: background 0.2s, color 0.2s;
+}
+
+label[for=upload-dataset-btn]:hover, label[for=upload-dataset-btn]:focus {
+    background: var(--color-add-group-hover-bg);
+    color: var(--color-add-group-hover-text);
+}
+
+/* Style for the Update button in the Data section */
+#update-datasets-btn {
+    display: inline-block;
+    padding: 8px 18px;
+    background: var(--color-add-group-bg);
+    color: var(--color-add-group-text);
+    border: 1px solid var(--color-section-border);
+    border-radius: 6px;
+    font-size: 1em;
+    margin: 8px 0 8px 8px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+
+#update-datasets-btn:hover, #update-datasets-btn:focus {
+    background: var(--color-add-group-hover-bg);
+    color: var(--color-add-group-hover-text);
 }
 
 /* Style for search results' bullet points and links */
@@ -381,11 +423,13 @@ input, textarea, select {
     padding-left: 0;
     font-size: 0.95em;
 }
+
 .node-links ul li {
     list-style-position: inside;
     margin-left: 0;
     padding-left: 0;
 }
+
 .node-links ul li a {
     color: var(--color-text-main);
     text-decoration: underline dotted;

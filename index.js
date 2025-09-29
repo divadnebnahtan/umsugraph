@@ -3,10 +3,13 @@ const Graph = new ForceGraph(elem);
 
 const sidebarToggleButton = document.getElementById("sidebar-toggle");
 
+const dataSection = document.getElementById('data-section');
 const groupsSection = document.getElementById('groups-section');
 const searchSection = document.getElementById('search-section');
 
-const dataList = document.getElementById('data-list');
+const datasetList = document.getElementById('dataset-list');
+const uploadDatasetBtn = document.getElementById('upload-dataset-btn');
+const updateDatasetsBtn = document.getElementById('update-datasets-btn');
 
 const groupsList = document.getElementById('groups-list');
 const addGroupBtn = document.getElementById('add-group-btn');
@@ -16,7 +19,6 @@ const searchResult = document.getElementById('search-result');
 
 const abyssOverlay = document.getElementById('abyss');
 
-const ASSETS_FILEPATH = '/umsugraph/assets/';
 const NODE_RELATIVE_RADIUS = 20;
 const DEFAULT_GROUP = {name: "default", colour: "#b3b3b3", radius: 1};
 const LINK_COLOUR = "#3f3f3f";
@@ -30,13 +32,17 @@ const XY_STRENGTH_MAX = 0.045;
 let searchSuggestionsIndex = -1;
 let filteredSearchSuggestions = [];
 
-let workingData;
+let workingDataset;
 let zoomLevel = 0;
 let nodeLabelAlphaLevel = '00';
 let nodeLabelFontSizeLevel = 0;
 let linkLabelAlphaLevel = '00';
 let linkLabelFontSizeLevel = 0;
 
+let datasets = [
+    // {"name": "Example Dataset", "base64": null,},
+    // {"name": "Example Dataset 2", "base64": null,}
+];
 let groups = [{tag: "club", colour: "#e0b152", radius: 1.5}, {tag: "person", colour: "#df5252"},];
 
 function clamp(num, min, max) {
@@ -111,10 +117,10 @@ function getNodeSubgraphMass(subgraphs, subgraphMasses) {
 
 function getNormalisedSubgraphStrength() {
     // subgraphs = array of arrays of node ids
-    const subgraphs = getSubgraphs(workingData.nodes, workingData.links);
+    const subgraphs = getSubgraphs(workingDataset.nodes, workingDataset.links);
 
     // subgraphMasses = array of masses corresponding to subgraphs
-    const subgraphMasses = getSubgraphMasses(subgraphs, workingData.nodes);
+    const subgraphMasses = getSubgraphMasses(subgraphs, workingDataset.nodes);
 
     // nodeSubgraphMass = object mapping node id to mass of its subgraph
     const nodeSubgraphMass = getNodeSubgraphMass(subgraphs, subgraphMasses);
@@ -248,7 +254,7 @@ function handleAbyss(zoomLevel) {
 
 function updateSuggestionsList() {
     const inputValue = searchInput.value.trim().toLowerCase();
-    filteredSearchSuggestions = inputValue.length === 0 ? [] : workingData.nodes.filter(n => n.name && n.name.toLowerCase().includes(inputValue));
+    filteredSearchSuggestions = inputValue.length === 0 ? [] : workingDataset.nodes.filter(n => n.name && n.name.toLowerCase().includes(inputValue));
     searchSuggestions.innerHTML = '';
     filteredSearchSuggestions.forEach((node, idx) => {
         const el = document.createElement('div');
@@ -291,16 +297,16 @@ function searchSubmit(query) {
 
     showSearchResult(query);
 
-    let nodes = workingData.nodes;
+    let nodes = workingDataset.nodes;
     let node = nodes.find(n => n.name === query);
 
     Graph.centerAt(node.x, node.y, 600);
 }
 
 function showSearchResult(query) {
-    let nodes = workingData.nodes;
+    let nodes = workingDataset.nodes;
     let node = nodes.find(n => n.name === query);
-    let links = workingData.links.filter(l => l.source.id === node.id || l.target.id === node.id);
+    let links = workingDataset.links.filter(l => l.source.id === node.id || l.target.id === node.id);
     let description = node["desc_html"];
 
     let heading = document.createElement('h2');
@@ -627,6 +633,7 @@ function setupGroups() {
             });
             groups = newGroups;
             renderGroups();
+            console.log("Updated groups");
         }
     });
 }
@@ -635,8 +642,8 @@ function setupSidebar() {
     sidebarToggleButton.addEventListener("click", () => {
         toggleSidebar();
     });
-    hideSidebar();
-    openSidebarSection(groupsSection);
+    // hideSidebar();
+    openSidebarSection(dataSection);
 }
 
 function hideSidebar() {
@@ -687,6 +694,16 @@ function refreshGraph() {
     Graph.nodeColor(n => getGroupPropertyFromTags(n.tags, "colour"));
 }
 
+function refreshGraphData() {
+    Graph.graphData(workingDataset);
+
+    const normalisedStrengthByMass = getNormalisedSubgraphStrength();
+    Graph.d3Force('x', d3.forceX(0).strength(n => normalisedStrengthByMass[n.id]));
+    Graph.d3Force('y', d3.forceY(0).strength(n => normalisedStrengthByMass[n.id]));
+
+    refreshGraph();
+}
+
 function setupGraph() {
     Graph.nodeRelSize(20);
     Graph.nodeLabel(null);
@@ -694,7 +711,7 @@ function setupGraph() {
     Graph.linkWidth(2);
     Graph.linkLabel(null);
 
-    Graph.graphData(workingData);
+    Graph.graphData(workingDataset);
     Graph.d3Force('center', null);
     Graph.d3Force('link').distance(LINK_DISTANCE).strength(LINK_STRENGTH);
     Graph.d3Force('charge').strength(CHARGE_STRENGTH);
@@ -716,40 +733,102 @@ function setupGraph() {
     refreshGraph();
 }
 
-function setupDataList() {
-    new Sortable(dataList, {
-        filter: '.ignore-elements', preventOnFilter: false, animation: 150, onUpdate: (_evt) => {
-            const newDataList = [];
-            const dataDivs = Array.from(dataList.children);
-            dataDivs.forEach(div => {
-                const url = div.getAttribute('data-url');
-                newDataList.push(url);
+function setupDatasets() {
+    uploadDatasetBtn.addEventListener('change', (event) => {
+        let files = event.target.files;
+        if (!files || files.length === 0) return;
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const reader = new FileReader();
+            reader.onload = e => {
+                const text = e.target.result;
+                // const jsonData = JSON.parse(text);
+                const base64Data = btoa(unescape(encodeURIComponent(text)));
+                datasets.push({name: file.name, base64: base64Data});
+                refreshDatasetList();
+            };
+
+            reader.readAsText(file);
+        }
+    });
+
+    updateDatasetsBtn.addEventListener('click', updateDatasets);
+
+    new Sortable(datasetList, {
+        filter: '.ignore-elements', preventOnFilter: false, animation: 150,
+        onUpdate: (_evt) => {
+            const newDatasets = [];
+            const datasetDivs = Array.from(datasetList.children);
+            datasetDivs.forEach(div => {
+                const origIdx = parseInt(div.getAttribute('data-dataset-idx'), 10);
+                newDatasets.push(datasets[origIdx]);
             });
-            // loadDataFromUrl(newDataList[0]);
-            // For now, only support one data source
-            console.log(newDataList);
+
+            datasets = newDatasets;
+            refreshDatasetList();
         }
     });
 }
 
-function loadDataFromUrl(url) {
-    return fetch(url)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .catch(error => {
-            console.error('Error fetching data:', error);
+function updateDatasets() {
+    let decodedDatasets = datasets.map(ds => {
+        if (!ds.base64) return null;
+        try {
+            const jsonStr = atob(ds.base64);
+            return JSON.parse(jsonStr);
+        } catch (e) {
+            console.error('Failed to decode dataset:', ds.name, e);
             return null;
+        }
+    }).filter(ds => ds !== null);
+
+    const merged = mergeDatasets(decodedDatasets);
+    if (merged) {
+        workingDataset = merged;
+        // console.log('Merged dataset:', JSON.stringify(workingDataset, null, 2));
+        refreshGraphData();
+    } else {
+        console.error('Failed to merge datasets.');
+    }
+}
+
+function refreshDatasetList() {
+    datasetList.innerHTML = '';
+    datasets.forEach((ds, idx) => {
+        const div = document.createElement('div');
+        div.className = 'dataset';
+        div.setAttribute('data-dataset-idx', idx);
+
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.className = 'dataset-name-input ignore-elements';
+        nameInput.value = ds.name;
+        nameInput.addEventListener('input', e => {
+            ds.name = e.target.value;
         });
+
+        // no file input
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'dataset-delete-btn ignore-elements';
+        delBtn.title = 'Delete dataset';
+        delBtn.textContent = '✕';
+        delBtn.addEventListener('click', () => {
+            datasets.splice(idx, 1);
+            refreshDatasetList();
+        });
+
+        div.appendChild(nameInput);
+        div.appendChild(delBtn);
+        datasetList.appendChild(div);
+    });
 }
 
 // data is an array of data sources (objects with nodes and links)
 // this function merges them into one dataset
-function mergeDatas(datas) {
-    if (!Array.isArray(datas) || datas.length === 0) {
+function mergeDatasets(datasets) {
+    if (!Array.isArray(datasets) || datasets.length === 0) {
         console.error('No data sources provided.');
         return;
     }
@@ -764,14 +843,14 @@ function mergeDatas(datas) {
         return `${a}|${b}|${name || ''}`;
     }
 
-    for (let i = datas.length - 1; i >= 0; i--) {
-        const data = datas[i];
-        if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.links)) {
-            console.warn('Invalid datum format, skipping:', data);
+    for (let i = datasets.length - 1; i >= 0; i--) {
+        const dataset = datasets[i];
+        if (!dataset || !Array.isArray(dataset.nodes) || !Array.isArray(dataset.links)) {
+            console.warn('Invalid datum format, skipping:', dataset);
             continue;
         }
         // Merge nodes by id, with negative id logic
-        data.nodes.forEach(node => {
+        dataset.nodes.forEach(node => {
             if (typeof node.id === 'string' && node.id.startsWith('-')) {
                 // Remove the positive version if it exists, do not add the negative node
                 const posId = node.id.slice(1);
@@ -817,7 +896,7 @@ function mergeDatas(datas) {
             }
         });
         // Merge links by unique key (undirected, source-target-name)
-        data.links.forEach(link => {
+        dataset.links.forEach(link => {
             const isNegative = typeof link.name === 'string' && link.name.startsWith('-');
             const baseName = isNegative ? link.name.slice(1) : link.name;
             const key = undirectedLinkKey(link.source, link.target, baseName);
@@ -848,7 +927,7 @@ function mergeDatas(datas) {
     const mergedNodes = Object.values(nodeMap);
     const mergedLinks = Object.values(linkMap);
 
-    return { nodes: mergedNodes, links: mergedLinks };
+    return {nodes: mergedNodes, links: mergedLinks};
 }
 
 function isEmptyValue(val) {
@@ -858,35 +937,40 @@ function isEmptyValue(val) {
     return typeof val === 'object' && !Array.isArray(val) && Object.keys(val).length === 0;
 }
 
-// function testFilteredData(data, clubs) {
-//     const clubNodes = data.nodes.filter(n => clubs.includes(n.name));
-//     const subgraphs = getSubgraphs(data.nodes, data.links);
-//
-//     let newNodes = [];
-//     let newLinks = [];
-//
-//     for (const club of clubNodes) {
-//         const subgraph = subgraphs.find(sg => sg.includes(club.id));
-//         newNodes = newNodes.concat(data.nodes.filter(n => subgraph.includes(n.id)));
-//         newLinks = newLinks.concat(data.links.filter(l => subgraph.includes(l.source) && subgraph.includes(l.target)));
-//     }
-//
-//     return {nodes: newNodes, links: newLinks};
-// }
+function getClubSubgraphs(dataset, clubs) {
+    const clubNodes = dataset.nodes.filter(n => clubs.includes(n.name));
+    const subgraphs = getSubgraphs(dataset.nodes, dataset.links);
+
+    let newNodes = [];
+    let newLinks = [];
+
+    for (const club of clubNodes) {
+        const subgraph = subgraphs.find(sg => sg.includes(club.id));
+        newNodes = newNodes.concat(dataset.nodes.filter(n => subgraph.includes(n.id)));
+        newLinks = newLinks.concat(dataset.links.filter(l => subgraph.includes(l.source) && subgraph.includes(l.target)));
+    }
+
+    return {nodes: newNodes, links: newLinks};
+}
 
 async function main() {
 
-    let defaultData = await loadDataFromUrl(ASSETS_FILEPATH + "default_data.json");
 
-    workingData = mergeDatas([
-        defaultData,
-    ]);
+    workingDataset = {
+        nodes: [// {"id": "1", "name": "Node 1", "tags": ["club"], "desc_html": ""},
+            //         // {"id": "2", "name": "Node 2", "tags": ["person"], "desc_html": ""},
+        ], links: []
+    };
 
-    setupDataList();
+
+
+
+    setupDatasets();
     setupGraph();
     setupGroups();
     setupSidebar();
     setupSearch();
+
 }
 
 main();
