@@ -395,6 +395,7 @@ input, textarea, select {
 #profile_main {
     font-size: calc(100% - 4px);
 }
+
 #profile_main * {
     font-size: inherit !important;
 }

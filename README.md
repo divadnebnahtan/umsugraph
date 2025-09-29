@@ -7,12 +7,15 @@
 - get node/link font and opacity feedback
 - hover effects
 - mobile: needs to be able to drag nodes when zoomed out
+  - expand hitbox when zoomed out
+  - just pick the nearest node within a certain distance?
 
 ### Sidebar
 - add functionality to reset/auto/update buttons
   - should the buttons be for each section instead?
   - feature put on hold for now
 - On background click, should clear search result, close sidebar, or both?
+- Keys like slash should not do anything if a text input is focused
 
 ### Forces
 - lots and lots of sliders
@@ -30,17 +33,19 @@
 ### Data (Sidebar)
 - download currently used data
 - allow user to upload their own data
+  - research indexeddb for storage
 - is it too much to allow user to edit data in-app?
 - auto scrape data?
   - github actions? github workflows? what is the difference?
   - has github pages bypassed cors?
   - cors.io?
+- multiple sources:
+  - user needs to be able to edit source list and order
+  - add UUID to data file itself so site knows if data has changed
+      - actually just use hash of data
+      - edit: wait why do i even need this?
 
 ### Data (Generation)
-- will it be possible to merge data from multiple sources?
-  - multiple sources: IDs are globally unique; user can edit source order
-    - add UUID to data file itself so site knows if data has changed
-      - actually just use hash of data
 - improve desc_html on data side
     - add bolding, links, etc
     - images
