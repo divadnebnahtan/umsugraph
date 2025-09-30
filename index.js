@@ -39,6 +39,8 @@ const loadLocalBtn = document.getElementById('load-local-btn');
 
 const abyssOverlay = document.getElementById('abyss');
 
+const PROXY_URL = "api/proxy.js?url=";
+
 const NODE_RELATIVE_RADIUS = 20;
 const DEFAULT_GROUP = {name: "default", colour: "#b3b3b3", radius: 1};
 const LINK_COLOUR = "#3f3f3f";
@@ -1042,31 +1044,34 @@ function buildStorageItems() {
 }
 
 function setupStorage() {
-    // check query params for a link to load
-    const params = new URLSearchParams(window.location.search);
-    const state = params.get('state');
+    const url = new URL(window.location);
+
+    let autosave = url.searchParams.has("autosave");
+    let state = url.searchParams.get("state");
+
+    url.searchParams.delete("autosave");
+    url.searchParams.delete("state");
 
     if (state) {
-        const url = "api/proxy?url=" + encodeURIComponent(state);
-        fetch(url).then(response => {
+        const fetchUrl = PROXY_URL + encodeURIComponent(state);
+        fetch(fetchUrl).then(response => {
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             return response.json();
         }).then(data => {
             applyStorageItems(data);
-            params.delete('state');
-
-            if (params.get("autosave")) {
-                saveIDB(data).then(() => params.delete('autosave'));
+            if (autosave) {
+                saveIDB(data);
             }
+            history.replaceState(null, "", url);
         }).catch(err => {
             console.error("Failed to load state from URL:", err);
             alert("Failed to load state from URL. See console for details.");
         });
     } else {
         loadIDB().then(items => {
-            if (items && items.autoload) {
+            if (items.autoload) {
                 applyStorageItems(items);
             }
         });

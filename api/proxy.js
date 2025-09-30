@@ -1,11 +1,10 @@
 export const config = {
-    runtime: "edge", // run at the edge
+    runtime: "edge",
 };
 
 export default async function handler(req) {
     const { searchParams } = new URL(req.url);
 
-    // Grab the target Dropbox URL from query string
     const url = searchParams.get("url");
     if (!url) {
         return new Response("Missing ?url= parameter", { status: 400 });
@@ -20,7 +19,7 @@ export default async function handler(req) {
             status: response.status,
             headers: {
                 "Content-Type": response.headers.get("content-type") || "application/octet-stream",
-                "Access-Control-Allow-Origin": "*", // <-- fixes CORS
+                "Access-Control-Allow-Origin": "*",
             },
         });
     } catch (err) {
