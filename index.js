@@ -758,12 +758,12 @@ function setupDatasets() {
             reader.onload = e => {
                 const text = e.target.result;
                 // const jsonData = JSON.parse(text);
-                const base64Data = btoa(unescape(encodeURIComponent(text)));
+                const base64Data = Base64.encode(text);
                 datasets.push({name: file.name, base64: base64Data});
                 refreshDatasetList();
             };
 
-            reader.readAsText(file);
+            reader.readAsText(file, 'UTF-8');
         }
     });
 
@@ -789,7 +789,7 @@ function updateDatasets() {
     let decodedDatasets = datasets.map(ds => {
         if (!ds.base64) return null;
         try {
-            const jsonStr = atob(ds.base64);
+            const jsonStr = Base64.decode(ds.base64);
             return JSON.parse(jsonStr);
         } catch (e) {
             console.error('Failed to decode dataset:', ds.name, e);

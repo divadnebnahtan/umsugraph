@@ -55,4 +55,4 @@ Immediate task: Storage
 - fuzzy search. do i even need it?
 - advanced filters (tags, degree, ...)
 - temp highlight search result node
-
+- clear search when datasets updated?
