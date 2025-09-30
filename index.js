@@ -994,7 +994,7 @@ async function loadIDB() {
 
 function saveFile(items, filename) {
     let downloadElement = document.createElement('a');
-    downloadElement.setAttribute('href', 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(items, null, 2)));
+    downloadElement.setAttribute('href', 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(items)));
     downloadElement.setAttribute('download', filename);
 
     downloadElement.style.display = 'none';
@@ -1042,11 +1042,35 @@ function buildStorageItems() {
 }
 
 function setupStorage() {
-    loadIDB().then(items => {
-        if (items && items.autoload) {
-            applyStorageItems(items);
-        }
-    })
+    // check query params for a link to load
+    const params = new URLSearchParams(window.location.search);
+    const state = params.get('state');
+
+    if (state) {
+        const url = "api/proxy?url=" + encodeURIComponent(state);
+        fetch(url).then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        }).then(data => {
+            applyStorageItems(data);
+            params.delete('state');
+
+            if (params.get("autosave")) {
+                saveIDB(data).then(() => params.delete('autosave'));
+            }
+        }).catch(err => {
+            console.error("Failed to load state from URL:", err);
+            alert("Failed to load state from URL. See console for details.");
+        });
+    } else {
+        loadIDB().then(items => {
+            if (items && items.autoload) {
+                applyStorageItems(items);
+            }
+        });
+    }
 
     saveLocalBtn.addEventListener('click', () => {
         saveIDB(buildStorageItems()).then(() => alert("Saved to local storage."));
