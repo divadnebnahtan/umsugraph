@@ -710,7 +710,6 @@ function setupGroups() {
             });
             groups = newGroups;
             renderGroups();
-            console.log("Updated groups");
         }
     });
 }
@@ -796,7 +795,7 @@ function updateDatasets() {
             const jsonStr = Base64.decode(ds.base64);
             return JSON.parse(jsonStr);
         } catch (e) {
-            console.error('Failed to decode dataset:', ds.name, e);
+            alert(`Error: Failed to decode dataset "${ds.name}". It will be skipped.`);
             return null;
         }
     }).filter(ds => ds !== null);
@@ -822,8 +821,25 @@ function refreshDatasetList() {
         nameInput.addEventListener('input', e => {
             ds.name = e.target.value;
         });
+        
+        const downloadBtn = document.createElement('button');
+        downloadBtn.className = 'dataset-download-btn ignore-elements';
+        downloadBtn.title = 'Download dataset';
+        downloadBtn.innerHTML = '&#x2B07;'; // Down arrow
+        downloadBtn.addEventListener('click', () => {
+            if (!ds.base64) alert("Error: No data to download.");
 
-        // no file input
+            let dataObj;
+            try {
+                const jsonStr = Base64.decode(ds.base64);
+                dataObj = JSON.parse(jsonStr);
+            } catch (e) {
+                alert(`Error: Failed to decode dataset "${ds.name}". Download aborted.`);
+                return;
+            }
+
+            saveFile(dataObj, ds.name || 'dataset.json');
+        });
 
         const delBtn = document.createElement('button');
         delBtn.className = 'dataset-delete-btn ignore-elements';
@@ -835,7 +851,9 @@ function refreshDatasetList() {
         });
 
         div.appendChild(nameInput);
+        div.appendChild(downloadBtn);
         div.appendChild(delBtn);
+        console.log(downloadBtn)
         datasetList.appendChild(div);
     });
 }
@@ -865,7 +883,7 @@ function mergeDatasets(datasets) {
     for (let i = datasets.length - 1; i >= 0; i--) {
         const dataset = datasets[i];
         if (!dataset || !Array.isArray(dataset.nodes) || !Array.isArray(dataset.links)) {
-            console.warn('Invalid datum format, skipping:', dataset);
+            alert('Invalid datum format, skipping: ' + JSON.stringify(dataset));
             continue;
         }
         // Merge nodes by id, with negative id logic
@@ -988,16 +1006,15 @@ function setupDatasets() {
 
 async function saveIDB(items) {
     (await db).put("app", items, "state");
-    console.log("Saved to IndexedDB");
 }
 
 async function loadIDB() {
     return ((await db).get("app", "state")) || {};
 }
 
-function saveFile(items, filename) {
+function saveFile(obj, filename) {
     const downloadElement = document.createElement('a');
-    downloadElement.setAttribute('href', 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(items)));
+    downloadElement.setAttribute('href', 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(obj)));
     downloadElement.setAttribute('download', filename);
 
     downloadElement.style.display = 'none';
@@ -1067,8 +1084,7 @@ function setupStorage() {
             }
             history.replaceState(null, "", url);
         }).catch(err => {
-            console.error("Failed to load state from URL:", err);
-            alert("Failed to load state from URL. See console for details.");
+            alert(`Failed to load state from URL: ${err.message}`);
         });
     } else {
         loadIDB().then(items => {
@@ -1099,10 +1115,8 @@ function setupStorage() {
                 const text = e.target.result;
                 const items = JSON.parse(text);
                 applyStorageItems(items);
-                alert("Loaded from file.");
             } catch (err) {
-                console.error("Failed to load file:", err);
-                alert("Failed to load file. See console for details.");
+                alert(`Failed to load file. Error: ${err.message}`);
             }
         };
 
