@@ -9,6 +9,7 @@
     <script src="//cdn.jsdelivr.net/npm/force-graph"></script>
     <script src="//cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script src="//cdn.jsdelivr.net/npm/js-base64@3.7.8/base64.min.js"></script>
+    <script src="//cdn.jsdelivr.net/npm/idb@8/build/umd.js"></script>
     <script defer src="index.js"></script>
 
     <link href="assets/favicon.svg" rel="icon" type="image/svg+xml">
@@ -19,26 +20,63 @@
 <div id="abyss"></div>
 <button id="sidebar-toggle">☰</button>
 <div id="sidebar">
-    <details class="sidebar-section">
-        <summary>Forces</summary>
-        <p>SAMPLE TEXT</p>
+    <details class="sidebar-section" id="data-section">
+        <summary>Data</summary>
+        <div id="dataset-list"></div>
+        <label class="nice-button" for="upload-dataset-btn">Upload File</label>
+        <input accept="application/JSON" id="upload-dataset-btn" multiple type="file">
+        <button class="nice-button" id="update-datasets-btn" type="button">Update</button>
     </details>
     <details class="sidebar-section" id="groups-section">
         <summary>Groups</summary>
         <div id="groups-list"></div>
         <button id="add-group-btn" type="button">New Group</button>
     </details>
-    <details class="sidebar-section">
-        <summary>Labels</summary>
-        <p>SAMPLE TEXT</p>
+    <details class="sidebar-section" id="forces-section">
+        <summary>Forces</summary>
+        <p>Coming soon!</p>
     </details>
-    <details class="sidebar-section" id="data-section">
-        <summary>Data</summary>
-        <div id="dataset-list">
+    <details class="sidebar-section" id="labels-section">
+        <summary>Labels</summary>
+        <p>Coming soon!</p>
+    </details>
+    <details class="sidebar-section" id="storage-section">
+        <summary>Storage</summary>
+        <div id="storage-options">
+            <div>
+                <input id="store-autoload-checkbox" type="checkbox">
+                <label for="store-autoload-checkbox">Autoload</label>
+            </div>
+            <div>
+                <input id="store-data-checkbox" type="checkbox">
+                <label for="store-data-checkbox">Data</label>
+            </div>
+            <div>
+                <input id="store-groups-checkbox" type="checkbox">
+                <label for="store-groups-checkbox">Groups</label>
+            </div>
+            <div>
+                <input id="store-forces-checkbox" type="checkbox">
+                <label for="store-forces-checkbox">Forces</label>
+            </div>
+            <div>
+                <input id="store-labels-checkbox" type="checkbox">
+                <label for="store-labels-checkbox">Labels</label>
+            </div>
         </div>
-        <label class="custom-file-upload" for="upload-dataset-btn">Upload File</label>
-        <input accept="application/JSON" id="upload-dataset-btn" multiple type="file">
-        <button id="update-datasets-btn" type="button">Update</button>
+        <div class="storage-block">
+            <div class="storage-block-label">File</div>
+            <div class="fieldset-buttons">
+                <button class="nice-button" id="save-file-btn" type="button">Download</button>
+                <label class="nice-button" for="load-file-btn" style="margin:0;">Upload</label>
+                <input accept="application/JSON" id="load-file-btn" type="file" style="display:none;">
+            </div>
+            <div class="storage-block-label">Browser</div>
+            <div class="fieldset-buttons">
+                <button class="nice-button" id="save-local-btn" type="button">Save</button>
+                <button class="nice-button" id="load-local-btn" type="button">Load</button>
+            </div>
+        </div>
     </details>
     <details class="sidebar-section" id="search-section">
         <summary>Search</summary>

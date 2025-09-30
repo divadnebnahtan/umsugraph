@@ -12,6 +12,7 @@ Immediate task: Storage
 - add functionality to reset/auto/update buttons
   - should the buttons be for each section instead?
   - feature put on hold for now
+  - edit: no auto/update buttons but a global reset button
 - Keys like slash should not do anything if a text input is focused
 
 ### Forces
@@ -36,6 +37,7 @@ Immediate task: Storage
 - improve desc_html on data side
     - add bolding, links, etc
     - images
+- clubs seeking affiliation have 'unaffiliated' tag
 
 ### Storage
 - Bunch of checkboxes for what to act on

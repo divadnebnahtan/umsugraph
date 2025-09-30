@@ -1,10 +1,20 @@
 const elem = document.getElementById("graph");
 const Graph = new ForceGraph(elem);
+const db = idb.openDB('umsugraph', 1, {
+    upgrade(db) {
+        if (!db.objectStoreNames.contains('app')) {
+            db.createObjectStore('app');
+        }
+    }
+});
 
 const sidebarToggleButton = document.getElementById("sidebar-toggle");
 
 const dataSection = document.getElementById('data-section');
 const groupsSection = document.getElementById('groups-section');
+const forcesSection = document.getElementById('forces-section');
+const labelsSection = document.getElementById('labels-section');
+const storageSection = document.getElementById('storage-section');
 const searchSection = document.getElementById('search-section');
 
 const datasetList = document.getElementById('dataset-list');
@@ -16,6 +26,16 @@ const addGroupBtn = document.getElementById('add-group-btn');
 const searchInput = document.getElementById('search-input');
 const searchSuggestions = document.getElementById('search-suggestions');
 const searchResult = document.getElementById('search-result');
+
+const storeAutoloadCheckbox = document.getElementById('store-autoload-checkbox');
+const storeDataCheckbox = document.getElementById('store-data-checkbox');
+const storeGroupsCheckbox = document.getElementById('store-groups-checkbox');
+const storeForcesCheckbox = document.getElementById('store-forces-checkbox');
+const storeLabelsCheckbox = document.getElementById('store-labels-checkbox');
+const saveFileBtn = document.getElementById('save-file-btn');
+const loadFileBtn = document.getElementById('load-file-btn');
+const saveLocalBtn = document.getElementById('save-local-btn');
+const loadLocalBtn = document.getElementById('load-local-btn');
 
 const abyssOverlay = document.getElementById('abyss');
 
@@ -41,6 +61,8 @@ let linkLabelFontSizeLevel = 0;
 
 let datasets = [];
 let groups = [{tag: "club", colour: "#e0b152", radius: 1.5}, {tag: "person", colour: "#df5252"},];
+let forces = {};
+let labels = {};
 
 function clamp(num, min, max) {
     return Math.min(Math.max(num, min), max);
@@ -53,6 +75,26 @@ function map(value, inMin, inMax, outMin, outMax) {
 // coefficients [a0, a1, a2, ...] for a0 + a1*x + a2*x^2 + ...
 function polynomial(x, coefficients) {
     return coefficients.reduce((acc, coeff, index) => acc + coeff * Math.pow(x, index), 0);
+}
+
+function alphaToHex(alpha) {
+    return Math.round(alpha * 255).toString(16).padStart(2, '0');
+}
+
+function getClubSubgraphs(dataset, clubs) {
+    const clubNodes = dataset.nodes.filter(n => clubs.includes(n.name));
+    const subgraphs = getSubgraphs(dataset.nodes, dataset.links);
+
+    let newNodes = [];
+    let newLinks = [];
+
+    for (const club of clubNodes) {
+        const subgraph = subgraphs.find(sg => sg.includes(club.id));
+        newNodes = newNodes.concat(dataset.nodes.filter(n => subgraph.includes(n.id)));
+        newLinks = newLinks.concat(dataset.links.filter(l => subgraph.includes(l.source) && subgraph.includes(l.target)));
+    }
+
+    return {nodes: newNodes, links: newLinks};
 }
 
 // Find connected components (subgraphs) in the graph
@@ -150,10 +192,6 @@ function getGroupPropertyFromTags(tags, property) {
     return DEFAULT_GROUP[property];
 }
 
-function alphaToHex(alpha) {
-    return Math.round(alpha * 255).toString(16).padStart(2, '0');
-}
-
 function nodeLabelFontSize(x) {
     let a = 7.88;
     let b = -2.53;
@@ -247,6 +285,36 @@ function handleAbyss(zoomLevel) {
             abyssOverlay.style.opacity = 0;
         }, 400);
     }
+}
+
+function hideSidebar() {
+    document.body.classList.add("sidebar-minimised");
+
+}
+
+function showSidebar() {
+    document.body.classList.remove("sidebar-minimised");
+}
+
+function toggleSidebar() {
+    document.body.classList.toggle("sidebar-minimised");
+}
+
+function openSidebarSection(section) {
+    section.setAttribute('open', '');
+}
+
+function closeSidebarSection(section) {
+    section.removeAttribute('open');
+}
+
+function setupSidebar() {
+    sidebarToggleButton.addEventListener("click", () => {
+        toggleSidebar();
+    });
+    // hideSidebar();
+    openSidebarSection(dataSection);
+    openSidebarSection(storageSection);
 }
 
 function updateSuggestionsList() {
@@ -644,35 +712,6 @@ function setupGroups() {
     });
 }
 
-function setupSidebar() {
-    sidebarToggleButton.addEventListener("click", () => {
-        toggleSidebar();
-    });
-    // hideSidebar();
-    openSidebarSection(dataSection);
-}
-
-function hideSidebar() {
-    document.body.classList.add("sidebar-minimised");
-
-}
-
-function showSidebar() {
-    document.body.classList.remove("sidebar-minimised");
-}
-
-function toggleSidebar() {
-    document.body.classList.toggle("sidebar-minimised");
-}
-
-function openSidebarSection(section) {
-    section.setAttribute('open', '');
-}
-
-function closeSidebarSection(section) {
-    section.removeAttribute('open');
-}
-
 function graphOnZoom(zoom) {
     if (zoom.k === zoomLevel) return;
     zoomLevel = zoom.k;
@@ -747,44 +786,6 @@ function setupGraph() {
     refreshGraphData();
 }
 
-function setupDatasets() {
-    uploadDatasetBtn.addEventListener('change', (event) => {
-        let files = event.target.files;
-        if (!files || files.length === 0) return;
-
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            const reader = new FileReader();
-            reader.onload = e => {
-                const text = e.target.result;
-                // const jsonData = JSON.parse(text);
-                const base64Data = Base64.encode(text);
-                datasets.push({name: file.name, base64: base64Data});
-                refreshDatasetList();
-            };
-
-            reader.readAsText(file, 'UTF-8');
-        }
-    });
-
-    updateDatasetsBtn.addEventListener('click', updateDatasets);
-
-    new Sortable(datasetList, {
-        filter: '.ignore-elements', preventOnFilter: false, animation: 150,
-        onUpdate: (_evt) => {
-            const newDatasets = [];
-            const datasetDivs = Array.from(datasetList.children);
-            datasetDivs.forEach(div => {
-                const origIdx = parseInt(div.getAttribute('data-dataset-idx'), 10);
-                newDatasets.push(datasets[origIdx]);
-            });
-
-            datasets = newDatasets;
-            refreshDatasetList();
-        }
-    });
-}
-
 function updateDatasets() {
     let decodedDatasets = datasets.map(ds => {
         if (!ds.base64) return null;
@@ -836,9 +837,14 @@ function refreshDatasetList() {
     });
 }
 
-// data is an array of data sources (objects with nodes and links)
-// this function merges them into one dataset
 function mergeDatasets(datasets) {
+    function isEmptyValue(val) {
+        if (val === null || val === undefined) return true;
+        if (typeof val === 'string' && val.trim() === '') return true;
+        if (Array.isArray(val) && val.length === 0) return true;
+        return typeof val === 'object' && !Array.isArray(val) && Object.keys(val).length === 0;
+    }
+
     if (!Array.isArray(datasets) || datasets.length === 0) {
         return {nodes: [], links: []};
     }
@@ -940,32 +946,145 @@ function mergeDatasets(datasets) {
     return {nodes: mergedNodes, links: mergedLinks};
 }
 
-function isEmptyValue(val) {
-    if (val === null || val === undefined) return true;
-    if (typeof val === 'string' && val.trim() === '') return true;
-    if (Array.isArray(val) && val.length === 0) return true;
-    return typeof val === 'object' && !Array.isArray(val) && Object.keys(val).length === 0;
+function setupDatasets() {
+    uploadDatasetBtn.addEventListener('change', (event) => {
+        let files = event.target.files;
+        if (!files || files.length === 0) return;
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const reader = new FileReader();
+            reader.onload = e => {
+                const text = e.target.result;
+                // const jsonData = JSON.parse(text);
+                const base64Data = Base64.encode(text);
+                datasets.push({name: file.name, base64: base64Data});
+                refreshDatasetList();
+            };
+
+            reader.readAsText(file, 'UTF-8');
+        }
+    });
+
+    updateDatasetsBtn.addEventListener('click', updateDatasets);
+
+    new Sortable(datasetList, {
+        filter: '.ignore-elements', preventOnFilter: false, animation: 150, onUpdate: (_evt) => {
+            const newDatasets = [];
+            const datasetDivs = Array.from(datasetList.children);
+            datasetDivs.forEach(div => {
+                const origIdx = parseInt(div.getAttribute('data-dataset-idx'), 10);
+                newDatasets.push(datasets[origIdx]);
+            });
+
+            datasets = newDatasets;
+            refreshDatasetList();
+        }
+    });
 }
 
-function getClubSubgraphs(dataset, clubs) {
-    const clubNodes = dataset.nodes.filter(n => clubs.includes(n.name));
-    const subgraphs = getSubgraphs(dataset.nodes, dataset.links);
+async function saveIDB(items) {
+    (await db).put("app", items, "state");
+    console.log("Saved to IndexedDB");
+}
 
-    let newNodes = [];
-    let newLinks = [];
+async function loadIDB() {
+    return ((await db).get("app", "state")) || {};
+}
 
-    for (const club of clubNodes) {
-        const subgraph = subgraphs.find(sg => sg.includes(club.id));
-        newNodes = newNodes.concat(dataset.nodes.filter(n => subgraph.includes(n.id)));
-        newLinks = newLinks.concat(dataset.links.filter(l => subgraph.includes(l.source) && subgraph.includes(l.target)));
+function saveFile(items, filename) {
+    let downloadElement = document.createElement('a');
+    downloadElement.setAttribute('href', 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(items, null, 2)));
+    downloadElement.setAttribute('download', filename);
+
+    downloadElement.style.display = 'none';
+    document.body.appendChild(downloadElement);
+    downloadElement.click();
+    document.body.removeChild(downloadElement);
+}
+
+function applyStorageItems(items) {
+    if (items.data) {
+        datasets = items.data;
+        refreshDatasetList();
+        updateDatasets();
     }
-
-    return {nodes: newNodes, links: newLinks};
+    if (items.groups) {
+        groups = items.groups;
+        renderGroups();
+    }
+    if (items.forces) {
+        forces = items.forces;
+        // setupForces();
+    }
+    if (items.labels) {
+        labels = items.labels;
+        // setupLabels();
+    }
 }
 
+function buildStorageItems() {
+    let items = {};
+    items.autoload = storeAutoloadCheckbox.checked;
+    if (storeDataCheckbox.checked) {
+        items.data = datasets;
+    }
+    if (storeGroupsCheckbox.checked) {
+        items.groups = groups;
+    }
+    if (storeForcesCheckbox.checked) {
+        items.forces = forces;
+    }
+    if (storeLabelsCheckbox.checked) {
+        items.labels = labels;
+    }
+    return items;
+}
+
+function setupStorage() {
+    loadIDB().then(items => {
+        if (items && items.autoload) {
+            applyStorageItems(items);
+        }
+    })
+
+    saveLocalBtn.addEventListener('click', () => {
+        saveIDB(buildStorageItems()).then(() => alert("Saved to local storage."));
+    });
+    loadLocalBtn.addEventListener('click', () => {
+        loadIDB().then(applyStorageItems);
+    });
+
+    saveFileBtn.addEventListener('click', () => {
+        let time = new Date().toISOString().replace(/[:.]/g, '-');
+        saveFile(buildStorageItems(), `umsugraph-state-${time}.json`);
+    });
+
+    loadFileBtn.addEventListener('change', event => {
+        let file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            try {
+                const text = e.target.result;
+                const items = JSON.parse(text);
+                applyStorageItems(items);
+                alert("Loaded from file.");
+            } catch (err) {
+                console.error("Failed to load file:", err);
+                alert("Failed to load file. See console for details.");
+            }
+        };
+
+        reader.readAsText(file, 'UTF-8');
+    });
+}
 
 setupDatasets();
-setupGraph();
 setupGroups();
-setupSidebar();
+// setupForces();
+// setupLabels();
+setupStorage();
 setupSearch();
+setupSidebar();
+setupGraph();
