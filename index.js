@@ -195,37 +195,37 @@ function getGroupPropertyFromTags(tags, property) {
 }
 
 function nodeLabelFontSize(x) {
-    let a = 7.88;
-    let b = -2.53;
-    let c = -23.78;
-    let d = 40.17;
+    const a = 7.88;
+    const b = -2.53;
+    const c = -23.78;
+    const d = 40.17;
 
-    let y = a * Math.sin(b * x) + c * x + d;
-    let output = clamp(y, 7, 28)
+    const y = a * Math.sin(b * x) + c * x + d;
+    const output = clamp(y, 7, 28)
 
     nodeLabelFontSizeLevel = output;
     return output;
 }
 
 function nodeLabelOpacity(x) {
-    let y = polynomial(x, [-0.351, 2.063]);
-    let output = clamp(y, 0, 1);
+    const y = polynomial(x, [-0.351, 2.063]);
+    const output = clamp(y, 0, 1);
 
     nodeLabelAlphaLevel = alphaToHex(output);
     return output;
 }
 
 function linkLabelFontSize(_x) {
-    let y = 8;
-    let output = clamp(y, 7, 28);
+    const y = 8;
+    const output = clamp(y, 7, 28);
 
     linkLabelFontSizeLevel = output;
     return output;
 }
 
 function linkLabelOpacity(x) {
-    let y = x - 2;
-    let output = clamp(y, 0, 1);
+    const y = x - 2;
+    const output = clamp(y, 0, 1);
 
     linkLabelAlphaLevel = alphaToHex(output);
     return output;
@@ -234,7 +234,7 @@ function linkLabelOpacity(x) {
 function nodeLabelCanvas(node, ctx) {
     if (nodeLabelAlphaLevel === '00') return;
 
-    let label = node.name;
+    const label = node.name;
     ctx.font = `${nodeLabelFontSizeLevel}px Inter`;
 
     ctx.textAlign = "center";
@@ -314,9 +314,10 @@ function setupSidebar() {
     sidebarToggleButton.addEventListener("click", () => {
         toggleSidebar();
     });
-    // hideSidebar();
-    openSidebarSection(dataSection);
-    openSidebarSection(storageSection);
+    hideSidebar();
+    openSidebarSection(searchSection);
+    // openSidebarSection(dataSection);
+    // openSidebarSection(storageSection);
 }
 
 function updateSuggestionsList() {
@@ -366,8 +367,8 @@ function searchSubmit(query) {
     searchInput.value = '';
     blurSearchInput();
     showSearchResult(query);
-    let nodes = workingDataset.nodes;
-    let node = nodes.find(n => n.name === query);
+    const nodes = workingDataset.nodes;
+    const node = nodes.find(n => n.name === query);
     Graph.centerAt(node.x, node.y, 600);
 }
 
@@ -376,16 +377,16 @@ function showSearchResult(query) {
         searchResult.innerHTML = '<div class="empty-message">No datasets loaded. Please add a dataset to use search.</div>';
         return;
     }
-    let nodes = workingDataset.nodes;
-    let node = nodes.find(n => n.name === query);
+    const nodes = workingDataset.nodes;
+    const node = nodes.find(n => n.name === query);
     if (!node) {
         searchResult.innerHTML = '<div class="empty-message">No matching node found.</div>';
         return;
     }
-    let links = (workingDataset.links || []).filter(l => l.source.id === node.id || l.target.id === node.id);
-    let description = node["desc_html"];
+    const links = (workingDataset.links || []).filter(l => l.source.id === node.id || l.target.id === node.id);
+    const description = node["desc_html"];
 
-    let heading = document.createElement('h2');
+    const heading = document.createElement('h2');
     heading.textContent = node.name;
 
     // Group links by their name
@@ -396,7 +397,7 @@ function showSearchResult(query) {
         linksByName[linkName].push(l);
     });
 
-    let linksUl = document.createElement('div');
+    const linksUl = document.createElement('div');
     linksUl.classList.add('node-links');
     Object.entries(linksByName).forEach(([linkName, groupLinks]) => {
         // Parent div for the link name
@@ -428,10 +429,10 @@ function showSearchResult(query) {
         linksUl.appendChild(groupDiv);
     });
 
-    let descDiv = document.createElement('div');
+    const descDiv = document.createElement('div');
     descDiv.innerHTML = description;
 
-    let separator = document.createElement('hr');
+    const separator = document.createElement('hr');
     separator.classList.add('separator');
 
     openSidebarSection(searchSection);
@@ -789,7 +790,7 @@ function setupGraph() {
 }
 
 function updateDatasets() {
-    let decodedDatasets = datasets.map(ds => {
+    const decodedDatasets = datasets.map(ds => {
         if (!ds.base64) return null;
         try {
             const jsonStr = Base64.decode(ds.base64);
@@ -950,7 +951,7 @@ function mergeDatasets(datasets) {
 
 function setupDatasets() {
     uploadDatasetBtn.addEventListener('change', (event) => {
-        let files = event.target.files;
+        const files = event.target.files;
         if (!files || files.length === 0) return;
 
         for (let i = 0; i < files.length; i++) {
@@ -995,7 +996,7 @@ async function loadIDB() {
 }
 
 function saveFile(items, filename) {
-    let downloadElement = document.createElement('a');
+    const downloadElement = document.createElement('a');
     downloadElement.setAttribute('href', 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(items)));
     downloadElement.setAttribute('download', filename);
 
@@ -1026,7 +1027,7 @@ function applyStorageItems(items) {
 }
 
 function buildStorageItems() {
-    let items = {};
+    const items = {};
     items.autoload = storeAutoloadCheckbox.checked;
     if (storeDataCheckbox.checked) {
         items.data = datasets;
@@ -1046,8 +1047,8 @@ function buildStorageItems() {
 function setupStorage() {
     const url = new URL(window.location);
 
-    let autosave = url.searchParams.has("autosave");
-    let state = url.searchParams.get("state");
+    const autosave = url.searchParams.has("autosave");
+    const state = url.searchParams.get("state");
 
     url.searchParams.delete("autosave");
     url.searchParams.delete("state");
@@ -1085,12 +1086,12 @@ function setupStorage() {
     });
 
     saveFileBtn.addEventListener('click', () => {
-        let time = new Date().toISOString().replace(/[:.]/g, '-');
+        const time = new Date().toISOString().replace(/[:.]/g, '-');
         saveFile(buildStorageItems(), `umsugraph-state-${time}.json`);
     });
 
     loadFileBtn.addEventListener('change', event => {
-        let file = event.target.files[0];
+        const file = event.target.files[0];
         if (!file) return;
         const reader = new FileReader();
         reader.onload = e => {
